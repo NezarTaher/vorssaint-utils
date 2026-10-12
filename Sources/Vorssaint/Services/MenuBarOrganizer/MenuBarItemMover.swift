@@ -4,183 +4,210 @@
 import CoreGraphics
 import Foundation
 
-/// Moves a menu bar item the only way macOS 27 honours: the ⌘-drag a person
-/// would make, posted at HID level. The agent animates the move and remembers
-/// the position by itself.
+/// Rearranges the menu bar by hand, so to speak: macOS 27 offers no API for an
+/// item's position, but it does obey a ⌘-drag, and MenuBarAgent persists where
+/// the icon was dropped. The drag is synthesised as HID mouse events.
 ///
-/// Blocking, and never to be called on the main thread: when the dragged item
-/// is Vorssaint's own, AppKit tracks the drag on the main run loop, and
-/// posting from there would interleave with that tracking and lose the drop.
+/// Every call blocks for the length of the gesture (about half a second plus
+/// travel). Do not call it on the main thread: the main run loop may itself be
+/// tracking the drag when the icon belongs to Vorssaint, and would then starve
+/// both the gesture and the tracking.
 enum MenuBarItemMover {
-    /// Marks the events posted here, so the shield lets them through and
-    /// swallows only what the physical mouse produces. "VSMB".
+    /// Stamped on every event posted here ("VSMB"), which is how the input
+    /// guard separates the gesture from whatever the user's hand is doing.
     static let syntheticTag: Int64 = 0x5653_4D42
 
-    private static let quietGap: TimeInterval = 0.25
-    private static let quietWaitLimit: TimeInterval = 1.5
-    private static let grabHold: TimeInterval = 0.18
-    private static let stepInterval: TimeInterval = 0.03
-    private static let maximumStep: CGFloat = 40
-    private static let releaseHold: TimeInterval = 0.12
+    /// The gesture's timing. The agent only follows a drag that looks human.
+    private enum Pace {
+        /// How long the pointer must have rested before the drag may begin.
+        static let pointerRest: TimeInterval = 0.25
+        /// A hand that never rests does not postpone the move forever.
+        static let pointerRestPatience: TimeInterval = 1.5
+        /// Press and hold before moving, or the press is not taken as a grab.
+        static let pressDwell: TimeInterval = 0.18
+        static let betweenSteps: TimeInterval = 0.03
+        /// Pause over the target before letting go.
+        static let dropDwell: TimeInterval = 0.12
+        /// Longest hop between two drag events. Beyond this the agent stops
+        /// noticing the slots the icon passes over.
+        static let longestHop: CGFloat = 40
+        /// One jump from start to end is not treated as a drag at all.
+        static let fewestHops = 6
+    }
 
-    /// ⌘-drags from one bar point to another (CG global coordinates, top-left
-    /// origin, the space Accessibility frames use). The pointer is borrowed
-    /// for well under a second and put back where it was.
+    /// ⌘-drags from `start` to `end`, both in CG global coordinates (top-left
+    /// origin, as Accessibility frames report them), then puts the pointer
+    /// back where it was. Blocking; never on the main thread.
     static func commandDrag(from start: CGPoint, to end: CGPoint) {
+        awaitRestingPointer()
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
         source.userData = syntheticTag
         let home = CGEvent(source: nil)?.location
 
-        // Do not pull the pointer out of a hand in motion. If it never rests,
-        // the shield still keeps the drag on its path.
-        waitForQuietPointer()
+        InputGuard.protecting { inputGuard in
+            func emit(_ type: CGEventType, at point: CGPoint, thenWait pause: TimeInterval) {
+                if let event = CGEvent(mouseEventSource: source, mouseType: type,
+                                       mouseCursorPosition: point, mouseButton: .left) {
+                    event.flags = .maskCommand
+                    event.setIntegerValueField(.eventSourceUserData, value: syntheticTag)
+                    event.post(tap: .cghidEventTap)
+                }
+                // The ⌘-click brings another app to the front, and macOS
+                // answers that by showing the cursor and re-coupling the mouse.
+                inputGuard.reapply()
+                Thread.sleep(forTimeInterval: pause)
+            }
 
-        let shield = DragShield()
-        shield.activate()
-        defer { shield.deactivate() }
-
-        func post(_ type: CGEventType, at point: CGPoint) {
-            guard let event = CGEvent(mouseEventSource: source, mouseType: type,
-                                      mouseCursorPosition: point, mouseButton: .left) else { return }
-            event.flags = .maskCommand
-            event.post(tap: .cghidEventTap)
-            // The ⌘-click hands the front to the item's owner, and macOS
-            // resets the cursor state on that change.
-            shield.reassert()
-        }
-
-        post(.leftMouseDown, at: start)
-        // A drag that leaves at once is not taken as a deliberate grab.
-        Thread.sleep(forTimeInterval: grabHold)
-        // A single jump is ignored, and long jumps make the agent lose track
-        // of the slots the item crosses.
-        let distance = hypot(end.x - start.x, end.y - start.y)
-        let steps = max(6, Int((distance / maximumStep).rounded(.up)))
-        for step in 1...steps {
-            let progress = CGFloat(step) / CGFloat(steps)
-            post(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * progress,
-                                                y: start.y + (end.y - start.y) * progress))
-            Thread.sleep(forTimeInterval: stepInterval)
-        }
-        Thread.sleep(forTimeInterval: releaseHold)
-        post(.leftMouseUp, at: end)
-
-        // Back home while the shield still hides the cursor.
-        if let home {
-            Thread.sleep(forTimeInterval: 0.06)
-            CGWarpMouseCursorPosition(home)
+            emit(.leftMouseDown, at: start, thenWait: Pace.pressDwell)
+            for point in path(from: start, to: end) {
+                emit(.leftMouseDragged, at: point, thenWait: Pace.betweenSteps)
+            }
+            Thread.sleep(forTimeInterval: Pace.dropDwell)
+            emit(.leftMouseUp, at: end, thenWait: 0)
+            // Still hidden here, so the trip home is not seen.
+            if let home { CGWarpMouseCursorPosition(home) }
         }
     }
 
-    private static func waitForQuietPointer() {
-        let types: [CGEventType] = [.mouseMoved, .leftMouseDown, .leftMouseUp, .leftMouseDragged,
-                                    .rightMouseDown, .rightMouseUp, .scrollWheel]
-        let deadline = ProcessInfo.processInfo.systemUptime + quietWaitLimit
-        while ProcessInfo.processInfo.systemUptime < deadline {
-            let idle = types.map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }.min()
-            if (idle ?? .infinity) >= quietGap { return }
-            Thread.sleep(forTimeInterval: 0.05)
+    /// The points to drag through, ending exactly on `end`. Smoothstep eases
+    /// the motion in and out; its steepest slope is 1.5, so the hop count is
+    /// sized for that and even the fastest hop stays within `longestHop`.
+    private static func path(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
+        let distance = hypot(end.x - start.x, end.y - start.y)
+        let hops = max(Pace.fewestHops, Int((distance * 1.5 / Pace.longestHop).rounded(.up)))
+        return (1...hops).map { hop in
+            let linear = CGFloat(hop) / CGFloat(hops)
+            let eased = linear * linear * (3 - 2 * linear)
+            return CGPoint(x: start.x + (end.x - start.x) * eased,
+                           y: start.y + (end.y - start.y) * eased)
+        }
+    }
+
+    /// Returns once the physical mouse has been still for `Pace.pointerRest`,
+    /// or when patience runs out. Starting under a moving hand would fight it.
+    private static func awaitRestingPointer() {
+        let deadline = Date().addingTimeInterval(Pace.pointerRestPatience)
+        while Date() < deadline {
+            let sinceLastInput = InputGuard.watchedEvents
+                .map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }
+                .min() ?? .infinity
+            if sinceLastInput >= Pace.pointerRest { return }
+            Thread.sleep(forTimeInterval: min(0.05, Pace.pointerRest - sinceLastInput))
         }
     }
 }
 
-/// Keeps the physical mouse out of one synthetic drag. Physical input shares
-/// the HID stream with the posted events: a nudge would pull the drag off its
-/// path, a click would land in the menu bar, a button release would end the
-/// drag early. Three layers, all undone by `deactivate`, and all connection
-/// state that the window server resets if the process dies mid-drag:
-///
-/// 1. Mouse and cursor are dissociated, so moving the mouse moves nothing.
-/// 2. An active event tap swallows physical mouse events. It runs on a thread
-///    of its own because the main run loop is busy tracking the drag when the
-///    item is Vorssaint's, and a starved tap is switched off by the system.
-/// 3. The cursor is hidden so it does not visibly fly across the bar.
-private final class DragShield {
-    private var tap: CFMachPort?
-    private var tapSource: CFRunLoopSource?
-    private var tapRunLoop: CFRunLoop?
-    private let armed = DispatchSemaphore(value: 0)
-    private var active = false
-    /// Hiding the cursor is counted; every hide is balanced on the way out.
-    private var hides = 0
+/// Keeps the user's mouse out of one synthesised gesture: the cursor is
+/// uncoupled from mouse movement and hidden, and a filtering event tap drops
+/// physical mouse input. Lives for a single `protecting` call.
+private final class InputGuard {
+    /// Everything a mouse or trackpad can add to a drag in progress.
+    static let watchedEvents: [CGEventType] = [
+        .mouseMoved, .scrollWheel,
+        .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+        .rightMouseDown, .rightMouseUp, .rightMouseDragged,
+        .otherMouseDown, .otherMouseUp, .otherMouseDragged,
+    ]
 
-    func activate() {
-        guard !active else { return }
-        active = true
-        reassert()
-        startTap()
+    private let display = CGMainDisplayID()
+    /// Hides are counted by the window server, so each needs its own show.
+    private var cursorHides = 0
+    private var filter: PhysicalInputFilter?
+
+    /// Runs `body` under the guard and lifts it afterwards, whichever way
+    /// `body` ends.
+    static func protecting(_ body: (InputGuard) -> Void) {
+        let inputGuard = InputGuard()
+        inputGuard.raise()
+        defer { inputGuard.lower() }
+        body(inputGuard)
     }
 
-    /// macOS restores association and cursor whenever the frontmost app
-    /// changes, which the drag itself causes, so both are set again after
-    /// every posted event.
-    func reassert() {
-        guard active else { return }
+    /// Call after anything that may have changed the frontmost app, since that
+    /// change makes macOS undo both the uncoupling and the hiding.
+    func reapply() {
         CGAssociateMouseAndMouseCursorPosition(0)
-        if CGDisplayHideCursor(CGMainDisplayID()) == .success { hides += 1 }
+        if CGDisplayHideCursor(display) == .success { cursorHides += 1 }
     }
 
-    /// The only way out, also after a failed drag: a tap left alive or a
-    /// mouse left dissociated would freeze the pointer for good.
-    func deactivate() {
-        guard active else { return }
-        active = false
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            CFMachPortInvalidate(tap)
-        }
-        if let tapRunLoop {
-            if let tapSource { CFRunLoopRemoveSource(tapRunLoop, tapSource, .commonModes) }
-            CFRunLoopStop(tapRunLoop)
-        }
-        tap = nil
-        tapSource = nil
-        tapRunLoop = nil
-        while hides > 0 {
-            CGDisplayShowCursor(CGMainDisplayID())
-            hides -= 1
-        }
+    private func raise() {
+        // Without Accessibility there is no filter; the two measures in
+        // `reapply` still keep most of a stray movement away.
+        filter = PhysicalInputFilter.start()
+        reapply()
+    }
+
+    private func lower() {
+        for _ in 0..<cursorHides { CGDisplayShowCursor(display) }
+        cursorHides = 0
         CGAssociateMouseAndMouseCursorPosition(1)
+        filter?.stop()
+        filter = nil
+    }
+}
+
+/// An event tap at the HID level that lets only tagged events through, served
+/// by a thread of its own. The main run loop cannot serve it, being possibly
+/// busy with the very drag this protects, and an unserved filtering tap stalls
+/// all input until the system switches it off.
+private final class PhysicalInputFilter {
+    private let port: CFMachPort
+    private let runLoop: CFRunLoop
+
+    private init(port: CFMachPort, runLoop: CFRunLoop) {
+        self.port = port
+        self.runLoop = runLoop
     }
 
-    private func startTap() {
-        let types: [CGEventType] = [.mouseMoved, .leftMouseDown, .leftMouseUp, .leftMouseDragged,
-                                    .rightMouseDown, .rightMouseUp, .rightMouseDragged,
-                                    .otherMouseDown, .otherMouseUp, .otherMouseDragged, .scrollWheel]
-        let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
-        // Without the tap (Accessibility just revoked) the shield degrades to
-        // the other two layers: the path stays put, stray clicks are not caught.
-        guard let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, _ in
-                // The disable notices are not mouse events and must pass.
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    return Unmanaged.passUnretained(event)
-                }
-                if event.getIntegerValueField(.eventSourceUserData) == MenuBarItemMover.syntheticTag {
-                    return Unmanaged.passUnretained(event)
-                }
-                return nil
-            },
-            userInfo: nil)
-        else { return }
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        tapSource = source
-        let thread = Thread { [self] in
-            let runLoop = CFRunLoopGetCurrent()
-            tapRunLoop = runLoop
-            CFRunLoopAddSource(runLoop, source, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: true)
-            armed.signal()
+    /// Returns once the tap is being served, so nothing synthesised can reach
+    /// the HID stream ahead of it. `nil` when the tap is refused.
+    static func start() -> PhysicalInputFilter? {
+        let mask = InputGuard.watchedEvents.reduce(CGEventMask(0)) { $0 | (1 << CGEventMask($1.rawValue)) }
+        guard let port = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
+                                           eventsOfInterest: mask, callback: passTaggedOnly, userInfo: nil),
+              let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
+        else { return nil }
+
+        let serving = DispatchSemaphore(value: 0)
+        var servedBy: CFRunLoop?
+        let thread = Thread {
+            let current = CFRunLoopGetCurrent()
+            CFRunLoopAddSource(current, source, .defaultMode)
+            // Reported from inside the loop: a stop requested before the loop
+            // runs would be lost and leave this thread behind.
+            CFRunLoopPerformBlock(current, CFRunLoopMode.defaultMode.rawValue) {
+                servedBy = current
+                serving.signal()
+            }
             CFRunLoopRun()
         }
-        thread.name = "com.vorssaint.menu-bar-organizer.shield"
+        thread.name = "com.vorssaint.menu-bar-organizer.input-filter"
         thread.qualityOfService = .userInteractive
         thread.start()
-        // Nothing is posted before the tap is live, and `deactivate` must find
-        // the run loop it has to stop. A thread always starts; the wait is brief.
-        armed.wait()
+        serving.wait()
+
+        guard let servedBy else {
+            CFMachPortInvalidate(port)
+            return nil
+        }
+        return PhysicalInputFilter(port: port, runLoop: servedBy)
     }
+
+    func stop() {
+        CGEvent.tapEnable(tap: port, enable: false)
+        CFRunLoopStop(runLoop)
+        CFMachPortInvalidate(port)
+    }
+}
+
+/// Tap callback. Notices that the tap was disabled carry no input and are
+/// handed on untouched; of the rest only the mover's own events survive.
+private func passTaggedOnly(_: CGEventTapProxy, type: CGEventType, event: CGEvent,
+                            _: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        return Unmanaged.passUnretained(event)
+    }
+    return event.getIntegerValueField(.eventSourceUserData) == MenuBarItemMover.syntheticTag
+        ? Unmanaged.passUnretained(event)
+        : nil
 }

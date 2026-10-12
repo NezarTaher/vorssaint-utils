@@ -117,6 +117,11 @@ enum MenuBarAccessibilityInventory {
         let isAppleSigned: Bool
     }
 
+    /// Files a process under an app. One registered with LaunchServices is its
+    /// own host. A helper living inside another app's bundle has no bundle id,
+    /// so the app around it stands in: that names the item for the editor,
+    /// though the allowlist addresses processes by their own id only and such
+    /// an item therefore cannot be hidden.
     private static func host(of pid: pid_t) -> Host? {
         let application = NSRunningApplication(processIdentifier: pid)
         let isAppleSigned = isAppleSigned(pid)
@@ -124,22 +129,25 @@ enum MenuBarAccessibilityInventory {
             return Host(bundleID: bundleID, name: application?.localizedName, isBundleless: false,
                         isAppleSigned: isAppleSigned)
         }
-        // Helper agents nested inside another app register no bundle id. The
-        // enclosing app names them for the editor, but the allowlist can only
-        // address a process by its own id, so such an item cannot be hidden.
         guard let executable = application?.executableURL ?? executableURL(of: pid) else { return nil }
-        var url = executable
-        while url.path != "/" {
-            if url.pathExtension == "app", let bundleID = Bundle(url: url)?.bundleIdentifier {
-                return Host(bundleID: bundleID,
-                            name: application?.localizedName ?? FileManager.default.displayName(atPath: url.path),
-                            isBundleless: true, isAppleSigned: isAppleSigned)
-            }
-            url = url.deletingLastPathComponent()
+        let enclosing = enclosingApp(of: executable)
+        // Outside any app the executable's name is all there is to go by.
+        let fallback = executable.lastPathComponent
+        return Host(bundleID: enclosing?.bundleID ?? fallback,
+                    name: application?.localizedName ?? enclosing?.displayName ?? fallback,
+                    isBundleless: true, isAppleSigned: isAppleSigned)
+    }
+
+    /// The innermost `.app` bundle with a bundle id among the directories above
+    /// `executable`: for a helper app nested in a main app, the helper app.
+    private static func enclosingApp(of executable: URL) -> (bundleID: String, displayName: String)? {
+        let directories = executable.standardizedFileURL.pathComponents.dropLast()
+        for index in directories.indices.reversed() where directories[index].hasSuffix(".app") {
+            let path = NSString.path(withComponents: Array(directories[...index]))
+            guard let bundleID = Bundle(path: path)?.bundleIdentifier, !bundleID.isEmpty else { continue }
+            return (bundleID, FileManager.default.displayName(atPath: path))
         }
-        let name = executable.lastPathComponent
-        return Host(bundleID: name, name: application?.localizedName ?? name, isBundleless: true,
-                    isAppleSigned: isAppleSigned)
+        return nil
     }
 
     /// Developer ID, App Store and Apple Development signatures, and Apple's own.
