@@ -3,16 +3,16 @@
 
 import AppKit
 
-/// The organizer's one status item. It is the control (click to show or hide)
+/// The collapser, the organizer's one status item. It is the control (click to show or hide)
 /// and the boundary at once: whatever sits left of it gets hidden. It must be
 /// in the bar before the first assertion, because an item registered while
 /// icons are hidden parks off screen until they are shown again.
-final class MenuBarOrganizerChevron: NSObject {
+final class MenuBarOrganizerCollapser: NSObject {
     /// Set as Accessibility title and identifier of the button, so the
     /// inventory can tell this item from Vorssaint's other ones.
     static let accessibilityName = "VorssaintMenuBarOrganizer"
 
-    /// The chevron as the inventory reports it, nil for a process without a
+    /// The collapser as the inventory reports it, nil for a process without a
     /// bundle id (a bare binary cannot own an addressable status item).
     static var identity: MenuBarItemIdentity? {
         guard let bundleID = Bundle.main.bundleIdentifier, !bundleID.isEmpty else { return nil }
@@ -51,10 +51,11 @@ final class MenuBarOrganizerChevron: NSObject {
         self.statusItem = nil
     }
 
-    /// Points at the hidden icons while they are hidden, away once shown.
+    /// Draws the icon chosen in Settings for the state. The name it is found
+    /// by stays the same whatever it looks like.
     func setCollapsed(_ collapsed: Bool) {
-        let image = NSImage(systemSymbolName: collapsed ? "chevron.left" : "chevron.right",
-                            accessibilityDescription: nil)
+        let icon = MenuBarOrganizerIcon.stored(UserDefaults.standard.string(forKey: DefaultsKey.menuBarOrganizerIcon))
+        let image = NSImage(systemSymbolName: icon.symbol(collapsed: collapsed), accessibilityDescription: nil)
         image?.isTemplate = true
         statusItem?.button?.image = image
     }

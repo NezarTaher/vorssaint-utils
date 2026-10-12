@@ -2,11 +2,15 @@
 // Copyright (C) 2026 Vorssaint
 
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// The Menu Bar Organizer page: the switch, a drawing of the bar split at the
-/// chevron and the auto re-hide delay. The drawing is a local copy; the bar
-/// only changes when it is applied.
+/// The Menu Bar Organizer page: the switch, the collapser's icon, a drawing of
+/// the bar in three tiers (always shown, hidden behind the collapser, never
+/// shown) and the auto re-hide delay. Rows are dragged within and across the
+/// tiers. The drawing is a local copy; the bar only changes when it is applied.
 struct MenuBarOrganizerSettings: View {
+    private typealias Editor = MenuBarOrganizerEditorSupport
+
     private static let autoRehideChoices = [5, 10, 30, 60]
 
     @ObservedObject private var l10n = L10n.shared
@@ -14,7 +18,10 @@ struct MenuBarOrganizerSettings: View {
     @ObservedObject private var service = MenuBarOrganizerService.shared
     @AppStorage(DefaultsKey.menuBarOrganizerEnabled) private var enabled = false
     @AppStorage(DefaultsKey.menuBarOrganizerAutoRehideSeconds) private var autoRehideSeconds = 0
+    @AppStorage(DefaultsKey.menuBarOrganizerIcon) private var icon = MenuBarOrganizerIcon.chevron
     @State private var draft = MenuBarLayout(hidden: [], visible: [])
+    /// The row being dragged, so a drop target knows what entered it.
+    @State private var dragging: MenuBarItemIdentity?
 
     private let ownBundleID = Bundle.main.bundleIdentifier ?? ""
 
@@ -38,6 +45,14 @@ struct MenuBarOrganizerSettings: View {
                 } else {
                     caption(strings.enableCaption)
                 }
+                Picker(strings.icon, selection: $icon) {
+                    ForEach(MenuBarOrganizerIcon.allCases, id: \.self) { choice in
+                        Label(iconName(choice), systemImage: choice.symbol(collapsed: true)).tag(choice)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!service.isSupported)
+                .onChange(of: icon) { _, _ in service.refreshIcon() }
                 ForEach(service.runningManagers, id: \.self) { manager in
                     warning(String(format: strings.otherManagerFormat, manager))
                 }
@@ -57,10 +72,12 @@ struct MenuBarOrganizerSettings: View {
 
             if service.state != .off {
                 Group {
-                    itemSection(strings.hiddenSection, items: draft.hidden, empty: strings.hiddenEmpty,
-                                action: strings.showItem) { draft.hidden.move(fromOffsets: $0, toOffset: $1) }
-                    itemSection(strings.visibleSection, items: draft.visible, empty: strings.visibleEmpty,
-                                action: strings.hideItem) { draft.visible.move(fromOffsets: $0, toOffset: $1) }
+                    tierSection(.show, items: draft.visible, title: strings.showSection,
+                                caption: strings.showCaption, empty: strings.showEmpty)
+                    tierSection(.hide, items: draft.hidden, title: strings.hideSection,
+                                caption: strings.hideCaption, empty: strings.hideEmpty)
+                    tierSection(.never, items: draft.neverShown, title: strings.neverSection,
+                                caption: strings.neverCaption, empty: strings.neverEmpty)
                     applySection
                 }
                 .disabled(service.state == .applying)
@@ -87,26 +104,40 @@ struct MenuBarOrganizerSettings: View {
 
     // MARK: - Layout
 
-    private func itemSection(_ title: String, items: [MenuBarItemIdentity], empty: String, action: String,
-                             move: @escaping (IndexSet, Int) -> Void) -> some View {
-        Section(title) {
+    private func tierSection(_ tier: Editor.Tier, items: [MenuBarItemIdentity], title: String,
+                             caption: String, empty: String) -> some View {
+        Section {
             if items.isEmpty {
                 Text(empty)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [UTType.text], delegate: dropDelegate(tier, before: nil))
             } else {
                 ForEach(items, id: \.self) { identity in
-                    row(identity, action: action)
+                    row(identity, tier: tier)
                 }
-                .onMove(perform: move)
+            }
+        } header: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                self.caption(caption)
             }
         }
     }
 
-    private func row(_ identity: MenuBarItemIdentity, action: String) -> some View {
+    /// Every row takes a drop, locked ones too, so a dragged row can land
+    /// anywhere in a list; only rows that may move can be dragged.
+    @ViewBuilder
+    private func row(_ identity: MenuBarItemIdentity, tier: Editor.Tier) -> some View {
         let locked = lockReason(identity)
-        return HStack(spacing: 8) {
-            icon(identity)
+        let content = HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .opacity(locked == nil ? 1 : 0)
+            appIcon(identity)
                 .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(name(identity))
@@ -118,13 +149,37 @@ struct MenuBarOrganizerSettings: View {
             }
             Spacer()
             if locked == nil {
-                Button(action) {
-                    draft = MenuBarOrganizerEditorSupport.movingAcross(identity, in: draft)
+                Menu(tierName(tier)) {
+                    ForEach(Editor.Tier.allCases.filter { $0 != tier }, id: \.self) { other in
+                        Button(tierName(other)) { move(identity, to: other, before: nil) }
+                    }
                 }
-                .buttonStyle(.borderless)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
         }
-        .moveDisabled(locked != nil)
+        .contentShape(Rectangle())
+        let target = dropDelegate(tier, before: identity)
+        if locked == nil {
+            content
+                .onDrag {
+                    dragging = identity
+                    // Never decoded: `dragging` carries the row.
+                    return NSItemProvider(object: "\(identity.bundleID)\u{1F}\(identity.title)" as NSString)
+                }
+                .onDrop(of: [UTType.text], delegate: target)
+        } else {
+            content
+                .onDrop(of: [UTType.text], delegate: target)
+        }
+    }
+
+    private func dropDelegate(_ tier: Editor.Tier, before identity: MenuBarItemIdentity?) -> MenuBarOrganizerDropDelegate {
+        MenuBarOrganizerDropDelegate(dragging: $dragging) { move($0, to: tier, before: identity) }
+    }
+
+    private func move(_ identity: MenuBarItemIdentity, to tier: Editor.Tier, before target: MenuBarItemIdentity?) {
+        draft = Editor.moving(identity, to: tier, before: target, in: draft) { lockReason($0) != nil }
     }
 
     private var applySection: some View {
@@ -165,13 +220,13 @@ struct MenuBarOrganizerSettings: View {
 
     /// The bar the drawing starts from and is compared with.
     private var baseline: MenuBarLayout {
-        MenuBarOrganizerEditorSupport.baseline(layout: service.layout, lastHidden: service.lastHidden,
-                                               collapsed: service.state == .collapsed)
+        Editor.baseline(layout: service.layout, lastHidden: service.lastHidden,
+                        neverShown: service.neverShown, collapsed: service.state == .collapsed)
     }
 
     private var pendingMoves: Int {
-        guard let chevron = MenuBarOrganizerChevron.identity else { return 0 }
-        return MenuBarOrganizerEditorSupport.pendingMoves(from: baseline, to: draft, chevron: chevron)
+        guard let collapser = MenuBarOrganizerCollapser.identity else { return 0 }
+        return Editor.pendingMoves(from: baseline, to: draft, collapser: collapser)
     }
 
     // MARK: - Rows
@@ -180,7 +235,7 @@ struct MenuBarOrganizerSettings: View {
         service.inventory.first { $0.identity == identity }
     }
 
-    /// Why a row cannot be hidden or moved here, nil when it can.
+    /// Why a row cannot be hidden, dragged or kept out of the bar, nil when it can.
     private func lockReason(_ identity: MenuBarItemIdentity) -> String? {
         if identity.bundleID == MenuBarOrganizerPolicy.agentBundleID { return strings.lockedSystem }
         if identity.bundleID == ownBundleID { return strings.lockedOwn }
@@ -192,15 +247,16 @@ struct MenuBarOrganizerSettings: View {
 
     private func name(_ identity: MenuBarItemIdentity) -> String {
         let appName = snapshot(identity)?.appName
-            ?? service.lastHidden.first { $0.identity == identity }?.appName
+            ?? (service.lastHidden + service.neverShown).first { $0.identity == identity }?.appName
             ?? identity.title
         // Several icons of one app are told apart by their own names.
-        let siblings = (draft.hidden + draft.visible).filter { $0.bundleID == identity.bundleID }.count
+        let siblings = (draft.hidden + draft.visible + draft.neverShown)
+            .filter { $0.bundleID == identity.bundleID }.count
         return siblings > 1 && appName != identity.title ? "\(appName) (\(identity.title))" : appName
     }
 
     @ViewBuilder
-    private func icon(_ identity: MenuBarItemIdentity) -> some View {
+    private func appIcon(_ identity: MenuBarItemIdentity) -> some View {
         if identity.bundleID != MenuBarOrganizerPolicy.agentBundleID, let url = bundleURL(identity) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                 .resizable()
@@ -226,6 +282,23 @@ struct MenuBarOrganizerSettings: View {
         }
     }
 
+    private func iconName(_ icon: MenuBarOrganizerIcon) -> String {
+        switch icon {
+        case .chevron: return strings.iconChevron
+        case .dots: return strings.iconDots
+        case .lines: return strings.iconLines
+        case .grid: return strings.iconGrid
+        }
+    }
+
+    private func tierName(_ tier: Editor.Tier) -> String {
+        switch tier {
+        case .show: return strings.tierShow
+        case .hide: return strings.tierHide
+        case .never: return strings.tierNever
+        }
+    }
+
     private func unsupportedText(_ reason: MenuBarOrganizerAvailability.Unsupported) -> String {
         switch reason {
         case .requiresMacOS27(let current): return String(format: strings.unsupportedOSFormat, current)
@@ -236,7 +309,7 @@ struct MenuBarOrganizerSettings: View {
     private func problemText(_ problem: MenuBarOrganizerService.Problem) -> String {
         switch problem {
         case .accessibilityMissing: return strings.problemAccessibility
-        case .chevronNotFound: return strings.problemChevronNotFound
+        case .collapserNotFound: return strings.problemCollapserNotFound
         case .activationFailed(let reason): return String(format: strings.problemActivationFormat, reason)
         case .nothingToHide: return strings.problemNothingToHide
         }
@@ -252,5 +325,27 @@ struct MenuBarOrganizerSettings: View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
+    }
+}
+
+/// Parts the rows live while a row is dragged over a drop target. Where the
+/// row may land is decided by `moved`, which runs the same pure move as the
+/// row menu, so the delegate has no rules of its own.
+private struct MenuBarOrganizerDropDelegate: DropDelegate {
+    @Binding var dragging: MenuBarItemIdentity?
+    let moved: (MenuBarItemIdentity) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging else { return }
+        moved(dragging)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }

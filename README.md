@@ -141,7 +141,7 @@ Reorder or hide panel sections, choose a compact layout, and export settings to 
 - **Radial menu.** Open a customizable wheel of apps, files, shortcuts and tools around the pointer, with profiles and submenus.
 - **Scratchpad.** Keep autosaved notes in tabs, with Markdown preview and export, in a floating window or Dynamic Island.
 - **Cleaning Mode.** Lock keyboard input while cleaning, with a black screen or a small visible indicator.
-- **Menu Bar Organizer.** Hide menu bar icons behind a chevron, reorder them from Settings and bring them back with one click. macOS 27 or later.
+- **Menu Bar Organizer.** Sort menu bar icons into three tiers (always shown, hidden behind a collapse icon of your choice, never shown), reorder them by drag and drop in Settings and bring the hidden ones back with one click. macOS 27 or later.
 
 ### Capture and create
 

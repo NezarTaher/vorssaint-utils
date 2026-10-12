@@ -72,7 +72,7 @@ enum MenuBarOrganizerPolicy {
 
     /// The allowlist works per bundle id, so an item can only be hidden when
     /// its host has one, and Vorssaint's own bundle must stay because the
-    /// chevron lives in it.
+    /// collapser lives in it.
     static func canHide(_ item: MenuBarItemSnapshot, ownBundleID: String) -> Bool {
         !item.isSystem && !item.hostIsBundleless
             && !item.identity.bundleID.isEmpty && item.identity.bundleID != ownBundleID
@@ -81,19 +81,43 @@ enum MenuBarOrganizerPolicy {
     static func isMovable(_ item: MenuBarItemSnapshot) -> Bool { !item.isSystem }
 }
 
-/// Items left of the chevron are hidden, right of it visible, in visual order.
+/// The icon of the collapser, the organizer's own status item.
+enum MenuBarOrganizerIcon: String, CaseIterable {
+    case chevron, dots, lines, grid
+
+    /// SF Symbol for the state. Only the chevron changes with the state: it
+    /// points at the hidden icons while they are hidden.
+    func symbol(collapsed: Bool) -> String {
+        switch self {
+        case .chevron: return collapsed ? "chevron.left" : "chevron.right"
+        case .dots: return "ellipsis"
+        case .lines: return "line.3.horizontal"
+        case .grid: return "circle.grid.2x2"
+        }
+    }
+
+    /// The icon a stored preference names, the chevron when it names none.
+    static func stored(_ raw: String?) -> MenuBarOrganizerIcon {
+        raw.flatMap(MenuBarOrganizerIcon.init(rawValue:)) ?? .chevron
+    }
+}
+
+/// Items left of the collapser are hidden, right of it visible, in visual
+/// order. Never-shown items have no place in the bar; theirs is the order of
+/// the editor.
 struct MenuBarLayout: Equatable {
     var hidden: [MenuBarItemIdentity]
     var visible: [MenuBarItemIdentity]
+    var neverShown: [MenuBarItemIdentity] = []
 }
 
 enum MenuBarOrganizerLayout {
-    /// Splits an inventory at the chevron. Purely positional: items that can
+    /// Splits an inventory at the collapser. Purely positional: items that can
     /// never be hidden still land on the side they sit on. nil when the
-    /// chevron is not in the inventory (fail open).
-    static func partition(_ items: [MenuBarItemSnapshot], chevron: MenuBarItemIdentity) -> MenuBarLayout? {
+    /// collapser is not in the inventory (fail open).
+    static func partition(_ items: [MenuBarItemSnapshot], collapser: MenuBarItemIdentity) -> MenuBarLayout? {
         let ordered = items.sorted { $0.frame.minX < $1.frame.minX }.map(\.identity)
-        guard let boundary = ordered.firstIndex(of: chevron) else { return nil }
+        guard let boundary = ordered.firstIndex(of: collapser) else { return nil }
         return MenuBarLayout(hidden: Array(ordered[..<boundary]),
                              visible: Array(ordered[(boundary + 1)...]))
     }
@@ -108,15 +132,27 @@ enum MenuBarOrganizerLayout {
             .map(\.identity.bundleID))
     }
 
-    /// Allowlist for the assertion. `nil` when nothing can be hidden (drop the
-    /// assertion instead). Every running app stays allowed, not only the ones
-    /// seen in the bar: an extra allowed bundle costs nothing, and a missing
-    /// one would swallow an icon nobody asked to hide.
-    static func allowlist(hiddenBundles: Set<String>, observed: [MenuBarItemSnapshot],
-                          running: Set<String>, ownBundleID: String) -> (bundles: [String], systemItems: [Int])? {
+    /// Bundles the assertion keeps out of the bar even while it is expanded.
+    /// A never-shown item is gone from Accessibility, so one the inventory
+    /// lacks counts when it is among the `known` records, which only ever
+    /// hold items that can be hidden.
+    static func neverShownBundles(in layout: MenuBarLayout, items: [MenuBarItemSnapshot],
+                                  known: [MenuBarHiddenRecord], ownBundleID: String) -> Set<String> {
+        Set(MenuBarHiddenRecord.records(for: layout.neverShown, items: items, known: known,
+                                        ownBundleID: ownBundleID).map(\.identity.bundleID))
+    }
+
+    /// Allowlist for the assertion: everything but the hidden and the
+    /// never-shown bundles. `nil` when neither names anything that can be
+    /// hidden (drop the assertion instead). Every running app stays allowed,
+    /// not only the ones seen in the bar: an extra allowed bundle costs
+    /// nothing, and a missing one would swallow an icon nobody asked to hide.
+    static func allowlist(hiddenBundles: Set<String>, neverShownBundles: Set<String>,
+                          observed: [MenuBarItemSnapshot], running: Set<String>,
+                          ownBundleID: String) -> (bundles: [String], systemItems: [Int])? {
         let protected = Set(observed.lazy.filter(\.hostIsBundleless).map(\.identity.bundleID))
             .union([ownBundleID, MenuBarOrganizerPolicy.agentBundleID, ""])
-        let hidden = hiddenBundles.subtracting(protected)
+        let hidden = hiddenBundles.union(neverShownBundles).subtracting(protected)
         guard !hidden.isEmpty, !ownBundleID.isEmpty else { return nil }
         let allowed = running
             .union(observed.lazy.filter { !$0.isSystem }.map(\.identity.bundleID))
@@ -237,8 +273,8 @@ struct MenuBarQuietGate {
     }
 }
 
-/// A hidden item as it is remembered across the time it is gone from
-/// Accessibility, so the editor can still name it.
+/// A hidden or never-shown item as it is remembered across the time it is
+/// gone from Accessibility, so the editor can still name it.
 struct MenuBarHiddenRecord: Codable, Equatable {
     let identity: MenuBarItemIdentity
     let appName: String?
@@ -249,6 +285,19 @@ struct MenuBarHiddenRecord: Codable, Equatable {
         return layout.hidden.compactMap { identity in
             guard let item = byIdentity[identity],
                   MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID) else { return nil }
+            return MenuBarHiddenRecord(identity: identity, appName: item.appName)
+        }
+    }
+
+    /// Records for the given identities, in their order. An item in the
+    /// inventory must be hideable; one the inventory lacks is taken over from
+    /// the `known` records, and dropped when there is none.
+    static func records(for identities: [MenuBarItemIdentity], items: [MenuBarItemSnapshot],
+                        known: [MenuBarHiddenRecord], ownBundleID: String) -> [MenuBarHiddenRecord] {
+        let byIdentity = Dictionary(items.map { ($0.identity, $0) }, uniquingKeysWith: { first, _ in first })
+        return identities.compactMap { identity in
+            guard let item = byIdentity[identity] else { return known.first { $0.identity == identity } }
+            guard MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID) else { return nil }
             return MenuBarHiddenRecord(identity: identity, appName: item.appName)
         }
     }
@@ -266,40 +315,90 @@ struct MenuBarHiddenRecord: Codable, Equatable {
 /// The drawing behind the layout editor in Settings. Nothing moves in the bar
 /// until the drawing is applied, so it is compared with the bar it started from.
 enum MenuBarOrganizerEditorSupport {
+    enum Tier: CaseIterable {
+        /// Right of the collapser, always in the bar.
+        case show
+        /// Left of the collapser, in the bar only while it is expanded.
+        case hide
+        /// Not in the bar at all.
+        case never
+    }
+
+    static func tier(of identity: MenuBarItemIdentity, in layout: MenuBarLayout) -> Tier? {
+        if layout.visible.contains(identity) { return .show }
+        if layout.hidden.contains(identity) { return .hide }
+        return layout.neverShown.contains(identity) ? .never : nil
+    }
+
     /// The layout the editor starts from. While icons are hidden the bar
     /// cannot be read, so remembered hidden items the last partition does not
-    /// know (a relaunch) join the hidden side.
+    /// know (a relaunch) join the hidden side. Never-shown items are always
+    /// drawn from memory. A walk of a bar that was open for a moment may have
+    /// seen their apps on either side; they are hidden all the same, so every
+    /// icon of such an app is drawn as never shown.
     static func baseline(layout: MenuBarLayout?, lastHidden: [MenuBarHiddenRecord],
-                         collapsed: Bool) -> MenuBarLayout {
+                         neverShown: [MenuBarHiddenRecord], collapsed: Bool) -> MenuBarLayout {
         var baseline = layout ?? MenuBarLayout(hidden: [], visible: [])
-        guard collapsed else { return baseline }
-        let known = Set(baseline.hidden + baseline.visible)
-        baseline.hidden += lastHidden.map(\.identity).filter { !known.contains($0) }
+        if collapsed {
+            let known = Set(baseline.hidden + baseline.visible)
+            baseline.hidden += lastHidden.map(\.identity).filter { !known.contains($0) }
+        }
+        let remembered = neverShown.map(\.identity)
+        let bundles = Set(remembered.map(\.bundleID))
+        let seen = (baseline.hidden + baseline.visible).filter { bundles.contains($0.bundleID) }
+        baseline.hidden.removeAll { bundles.contains($0.bundleID) }
+        baseline.visible.removeAll { bundles.contains($0.bundleID) }
+        baseline.neverShown = remembered + seen.filter { !remembered.contains($0) }
         return baseline
     }
 
-    /// Moves an item to the other side, next to the chevron: one drag, and
-    /// the icons already there keep their order.
-    static func movingAcross(_ identity: MenuBarItemIdentity, in layout: MenuBarLayout) -> MenuBarLayout {
-        var result = layout
-        if let index = result.hidden.firstIndex(of: identity) {
-            result.hidden.remove(at: index)
-            result.visible.insert(identity, at: 0)
-        } else if let index = result.visible.firstIndex(of: identity) {
-            result.visible.remove(at: index)
-            result.hidden.append(identity)
+    /// Moves an item into `tier`, in front of `target` or to the end of the
+    /// tier without one. The one function behind drag and drop and the row
+    /// menu. Never show works per app, so a move into or out of it takes
+    /// every icon of the app along, and an item that `isLocked` never goes
+    /// there. Within one list an item dragged down lands behind the row it
+    /// reached, as it does when rows part under a drag.
+    static func moving(_ identity: MenuBarItemIdentity, to tier: Tier, before target: MenuBarItemIdentity?,
+                       in layout: MenuBarLayout, isLocked: (MenuBarItemIdentity) -> Bool) -> MenuBarLayout {
+        guard identity != target, let source = Self.tier(of: identity, in: layout),
+              !(tier == .never && isLocked(identity)) else { return layout }
+        var moved = [identity]
+        if source != tier, source == .never || tier == .never {
+            moved = (layout.hidden + layout.visible + layout.neverShown).filter {
+                $0.bundleID == identity.bundleID && !(tier == .never && isLocked($0))
+            }
         }
+        let path: WritableKeyPath<MenuBarLayout, [MenuBarItemIdentity]>
+        switch tier {
+        case .show: path = \.visible
+        case .hide: path = \.hidden
+        case .never: path = \.neverShown
+        }
+        let list = layout[keyPath: path]
+        let draggedDown = source == tier
+            && (target.flatMap(list.firstIndex(of:)) ?? 0) > (list.firstIndex(of: identity) ?? 0)
+
+        var result = layout
+        result.hidden.removeAll(where: moved.contains)
+        result.visible.removeAll(where: moved.contains)
+        result.neverShown.removeAll(where: moved.contains)
+        let anchor = target.flatMap(result[keyPath: path].firstIndex(of:))
+        result[keyPath: path].insert(contentsOf: moved,
+                                     at: anchor.map { draggedDown ? $0 + 1 : $0 } ?? result[keyPath: path].count)
         return result
     }
 
-    /// How many drags applying `draft` to a bar laid out as `baseline` takes.
-    /// System items are left out, as they are when the drags are planned.
+    /// How many steps applying `draft` to a bar laid out as `baseline` takes:
+    /// one per drag, and one for a changed set of never-shown items, which
+    /// needs an apply of its own. System items are left out, as they are when
+    /// the drags are planned.
     static func pendingMoves(from baseline: MenuBarLayout, to draft: MenuBarLayout,
-                             chevron: MenuBarItemIdentity) -> Int {
-        let current = (baseline.hidden + [chevron] + baseline.visible)
+                             collapser: MenuBarItemIdentity) -> Int {
+        let current = (baseline.hidden + [collapser] + baseline.visible)
             .filter { $0.bundleID != MenuBarOrganizerPolicy.agentBundleID }
-        return MenuBarMovePlanner.plan(current: current,
-                                       target: draft.hidden + [chevron] + draft.visible).count
+        let drags = MenuBarMovePlanner.plan(current: current,
+                                            target: draft.hidden + [collapser] + draft.visible).count
+        return drags + (Set(baseline.neverShown) == Set(draft.neverShown) ? 0 : 1)
     }
 }
 

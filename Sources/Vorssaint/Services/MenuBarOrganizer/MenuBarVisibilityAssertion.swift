@@ -27,7 +27,7 @@ final class MenuBarVisibilityAssertion {
         generation += 1
         let requested = generation
         // An empty bundle list would hide every third-party icon, including
-        // the chevron that brings them back.
+        // the collapser that brings them back.
         guard !bundles.isEmpty else {
             release()
             completion("empty allowlist")

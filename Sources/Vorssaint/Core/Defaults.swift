@@ -308,8 +308,11 @@ enum DefaultsKey {
     static let killProcessSortAscending = "killProcessSortAscending"
     static let menuBarOrganizerEnabled = "menuBarOrganizerEnabled"
     static let menuBarOrganizerAutoRehideSeconds = "menuBarOrganizerAutoRehideSeconds" // 0 = never
+    static let menuBarOrganizerIcon = "menuBarOrganizerIcon" // chevron | dots | lines | grid
     /// What the last collapse hid, as JSON. Machine state, never registered.
     static let menuBarOrganizerLastHidden = "menuBarOrganizerLastHidden"
+    /// The icons kept out of the bar for good, as JSON. Machine state, never registered.
+    static let menuBarOrganizerNeverShown = "menuBarOrganizerNeverShown"
     static let panelUtilityCleaner = "panelUtilityCleaner"
     static let panelUtilityHomebrew = "panelUtilityHomebrew"
     static let homebrewGroupDependencies = "homebrewGroupDependencies"
@@ -1535,6 +1538,7 @@ enum Defaults {
         DefaultsKey.killProcessSortAscending: false,
         DefaultsKey.menuBarOrganizerEnabled: false,
         DefaultsKey.menuBarOrganizerAutoRehideSeconds: 0,
+        DefaultsKey.menuBarOrganizerIcon: MenuBarOrganizerIcon.chevron.rawValue,
         DefaultsKey.panelUtilityCleaner: true,
         DefaultsKey.panelUtilityHomebrew: true,
         DefaultsKey.homebrewGroupDependencies: true,

@@ -361,6 +361,8 @@ enum SettingsDirectory {
                                       icon: "menubar.rectangle",
                                       keywords: [FeatureStrings.menuBarOrganizer(language).enable,
                                                  FeatureStrings.menuBarOrganizer(language).autoRehide,
+                                                 FeatureStrings.menuBarOrganizer(language).neverSection,
+                                                 FeatureStrings.menuBarOrganizer(language).icon,
                                                  "menu bar", "icons", "hide", "chevron", "bartender"]),
             ]),
             (categories.utilities, [

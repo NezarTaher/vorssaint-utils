@@ -110,6 +110,7 @@ enum SettingsBackupSupport {
         DefaultsKey.bluetoothSleepRestorePending,
         // The icons one Mac's menu bar had hidden name apps another may not run.
         DefaultsKey.menuBarOrganizerLastHidden,
+        DefaultsKey.menuBarOrganizerNeverShown,
         DefaultsKey.micMuteActive,
         DefaultsKey.micMuteSavedVolume,
         // Levels and device ids belong to the microphones of one Mac.

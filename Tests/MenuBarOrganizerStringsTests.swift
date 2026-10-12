@@ -47,6 +47,10 @@ enum MenuBarOrganizerStringsTests {
                          && strings.applyReportFormat.contains("%2$d"),
                          "\(prefix): apply report uses positional arguments")
 
+            suite.expect(Set([strings.tierShow, strings.tierHide, strings.tierNever]).count == 3
+                         && Set([strings.iconChevron, strings.iconDots, strings.iconLines, strings.iconGrid]).count == 4,
+                         "\(prefix): the tiers and the icons each have a name of their own")
+
             if language != .enUS {
                 suite.expect(strings.title != english.title
                              && strings.enableCaption != english.enableCaption,
