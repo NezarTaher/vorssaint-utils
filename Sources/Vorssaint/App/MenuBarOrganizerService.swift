@@ -82,12 +82,13 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
         }
     }
 
-    func start() {
+    func syncWithPreferences() {
         rules = MenuBarOrganizerRules(storage: UserDefaults.standard.dictionary(forKey: DefaultsKey.menuBarOrganizerSections) as? [String: String] ?? [:])
         setEnabled(UserDefaults.standard.bool(forKey: DefaultsKey.menuBarOrganizerEnabled))
     }
 
-    func setEnabled(_ enabled: Bool) {
+    func setEnabled(_ requested: Bool) {
+        let enabled = requested && AppFeature.menuBarOrganizer.isAvailable
         guard enabled != isEnabled else { return }
         isEnabled = enabled
         failure = nil

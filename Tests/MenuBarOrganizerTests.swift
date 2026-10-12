@@ -5,6 +5,29 @@ import Foundation
 
 enum MenuBarOrganizerTests {
     static func run(_ suite: TestSuite) {
+        suite.expect(!AppFeature.menuBarOrganizer.installedByDefault
+                     && AppFeature.menuBarOrganizer.isBeta,
+                     "the experimental organizer waits for an explicit feature install")
+        suite.expect(AppFeature.menuBarOrganizer.enabledKeys == [DefaultsKey.menuBarOrganizerEnabled]
+                     && AppFeature.menuBarOrganizer.permissions == [.accessibility],
+                     "the organizer declares its enable switch and only Accessibility access")
+        suite.expect(SettingsBackupSupport.exportKeys().isSuperset(of: [
+            DefaultsKey.menuBarOrganizerEnabled, DefaultsKey.menuBarOrganizerSections,
+            AppFeature.menuBarOrganizer.availabilityKey]),
+                     "organizer installation, enabled state, and section preferences are portable")
+        suite.expect(AppFeature.menuBarOrganizer.settingsDestination
+                     == FeatureSettingsDestination(.general, sectionAnchor: .panelConfiguration),
+                     "the feature hub routes the organizer to Menu Bar settings")
+        func active(_ permission: AppPermission, installed: Bool = true, enabled: Bool = true) -> [AppFeature] {
+            AppFeature.activeFeatures(using: permission,
+                isAvailable: { installed && $0 == .menuBarOrganizer },
+                boolFor: { enabled && $0 == DefaultsKey.menuBarOrganizerEnabled }, stringFor: { _ in nil })
+        }
+        suite.expect(active(.accessibility) == [.menuBarOrganizer] && active(.screenRecording).isEmpty,
+                     "an enabled organizer uses Accessibility without screen recording")
+        suite.expect(active(.accessibility, installed: false).isEmpty
+                     && active(.accessibility, enabled: false).isEmpty,
+                     "disabled or uninstalled organizers create no active permission demand")
         var state = MenuBarOrganizerVisibility()
         suite.expect(state.hiddenShown && state.alwaysShown, "new dividers start revealed for arranging")
         state.toggleHidden()
