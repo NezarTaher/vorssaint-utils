@@ -101,6 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         PanelLayout.resetCollapsedSectionsOnce(for: "2.15.1")
 
         statusController = StatusItemController()
+        MenuBarOrganizerService.shared.start()
+        MenuBarOrganizerService.shared.onOpenSettings = { [weak self] in
+            SettingsRouter.shared.request(FeatureSettingsDestination(.general, sectionAnchor: .panelConfiguration))
+            self?.openSettingsWindow()
+        }
         statusController.onLeftClick = { [weak self] in
             self?.captureStatusClick()
             self?.toggleMainPopover()
@@ -282,6 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func applicationWillTerminate(_ notification: Notification) {
         isTerminating = true
+        MenuBarOrganizerService.shared.setEnabled(false)
         CommandBarService.shared.restoreBorrowedInputSource()
         if AppFeature.notch.isAvailable { NotchService.shared.stop(restoreCapture: false) }
         // Quitting properly means the start worked, whenever it happened.
@@ -1472,6 +1478,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         let strings = L10n.shared.s
         let menu = NSMenu()
 
+        if MenuBarOrganizerService.shared.isEnabled {
+            let organizer = NSMenuItem(title: MenuBarOrganizerStrings.localized(L10n.shared.language).title,
+                                       action: nil, keyEquivalent: "")
+            organizer.submenu = MenuBarOrganizerService.shared.makeMenu(anchor: button)
+            menu.addItem(organizer)
+            menu.addItem(.separator())
+        }
+
         if AppFeature.keepAwake.isAvailable {
             let toggleItem = NSMenuItem(title: manager.isActive ? strings.menuDisableAwake : strings.menuEnableAwake,
                                         action: #selector(menuToggleAwake),
@@ -1634,6 +1648,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: strings.menuQuit,
                                    action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        // Also available in the app's menu bar when a status item is in the
+        // system overflow. Rebuild on opening so its state never goes stale.
+        let organizer = NSMenuItem(title: MenuBarOrganizerStrings.localized(L10n.shared.language).title,
+                                   action: nil, keyEquivalent: "")
+        organizer.submenu = MenuBarOrganizerService.shared.makeDynamicMenu()
+        mainMenu.addItem(organizer)
 
         // Edit menu, so text fields in Settings respond to the editing shortcuts.
         let editMenuItem = NSMenuItem()
