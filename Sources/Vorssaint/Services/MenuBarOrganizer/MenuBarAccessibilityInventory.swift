@@ -1,0 +1,174 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Vorssaint
+
+import AppKit
+import ApplicationServices
+import Darwin
+
+/// Reads the menu bar items of the main display from MenuBarAgent's
+/// Accessibility tree. On macOS 27 the agent composites the bar itself, so the
+/// window list no longer shows status items and this tree is the only inventory.
+///
+/// Shape, one group per item:
+///
+///     AXApplication(MenuBarAgent)
+///       AXWindow                         one per display
+///         AXGroup                        the item's frame
+///           AXButton pid=<app>           third-party item, owned by its app
+///         AXGroup
+///           AXGroup pid=<MenuBarAgent>
+///             AXMenuBarItem id=com.apple.menuextra.…    system item
+///
+/// Hidden items leave the tree, and frames read while icons are hidden are
+/// stale: walk an unrestricted bar when the layout matters.
+enum MenuBarAccessibilityInventory {
+    private static let queue = DispatchQueue(label: "com.vorssaint.menu-bar-organizer.inventory",
+                                             qos: .userInitiated)
+    /// A stuck agent must not wedge a walk for the default six seconds.
+    private static let messagingTimeout: Float = 0.25
+    private static let systemIdentifierPrefix = "com.apple.menuextra."
+
+    /// Walks off the main thread and answers on it, left to right.
+    static func walk(completion: @escaping ([MenuBarItemSnapshot]) -> Void) {
+        queue.async {
+            let items = walkNow()
+            DispatchQueue.main.async { completion(items) }
+        }
+    }
+
+    /// Blocking walk for callers that already run in the background.
+    static func walkNow() -> [MenuBarItemSnapshot] {
+        guard AXIsProcessTrusted(),
+              let agent = NSRunningApplication
+                  .runningApplications(withBundleIdentifier: MenuBarOrganizerPolicy.agentBundleID).first
+        else { return [] }
+        let agentPID = agent.processIdentifier
+        let application = AXUIElementCreateApplication(agentPID)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+
+        // Every display has a bar window. Only the main one counts: mixing
+        // displays would compare frames from different bars.
+        let origin = CGDisplayBounds(CGMainDisplayID()).origin
+        guard let window = children(of: application).first(where: {
+            role(of: $0) == kAXWindowRole && frame(of: $0)?.origin == origin
+        }) else { return [] }
+
+        var items: [MenuBarItemSnapshot] = []
+        var taken = Set<MenuBarItemIdentity>()
+        var hosts: [pid_t: Host?] = [:]
+        for group in children(of: window) {
+            guard let frame = frame(of: group), frame.width > 0,
+                  let item = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
+            else { continue }
+            taken.insert(item.identity)
+            items.append(item)
+        }
+        return items.sorted { $0.frame.minX < $1.frame.minX }
+    }
+
+    // MARK: - Classification
+
+    private static func describe(_ group: AXUIElement, frame: CGRect, agentPID: pid_t,
+                                 taken: Set<MenuBarItemIdentity>,
+                                 hosts: inout [pid_t: Host?]) -> MenuBarItemSnapshot? {
+        let leaves = children(of: group)
+        // Usually an AXButton, but a custom status view can surface as static
+        // text or an unknown role: whatever the agent does not own names its app.
+        for leaf in leaves {
+            guard let pid = pid(of: leaf), pid != agentPID else { continue }
+            if hosts[pid] == nil { hosts[pid] = .some(host(of: pid)) }
+            guard let host = hosts[pid] ?? nil else { continue }
+            let identity = MenuBarItemIdentity.make(
+                bundleID: host.bundleID,
+                candidates: [string(leaf, kAXTitleAttribute), string(leaf, kAXIdentifierAttribute),
+                             string(leaf, kAXDescriptionAttribute)],
+                taken: taken)
+            return MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
+                                       appName: host.name, hostIsBundleless: host.isBundleless)
+        }
+        for leaf in leaves where role(of: leaf) == kAXGroupRole {
+            for extra in children(of: leaf) where role(of: extra) == kAXMenuBarItemRole {
+                guard let identifier = string(extra, kAXIdentifierAttribute),
+                      identifier.hasPrefix(systemIdentifierPrefix) else { continue }
+                let identity = MenuBarItemIdentity.make(bundleID: MenuBarOrganizerPolicy.agentBundleID,
+                                                        candidates: [identifier], taken: taken)
+                return MenuBarItemSnapshot(identity: identity, frame: frame, pid: agentPID,
+                                           appName: string(extra, kAXDescriptionAttribute),
+                                           hostIsBundleless: false)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Host attribution
+
+    private struct Host {
+        let bundleID: String
+        let name: String?
+        /// The process has no bundle id of its own; `bundleID` belongs to the
+        /// app that encloses its executable.
+        let isBundleless: Bool
+    }
+
+    private static func host(of pid: pid_t) -> Host? {
+        let application = NSRunningApplication(processIdentifier: pid)
+        if let bundleID = application?.bundleIdentifier, !bundleID.isEmpty {
+            return Host(bundleID: bundleID, name: application?.localizedName, isBundleless: false)
+        }
+        // Helper agents nested inside another app register no bundle id. The
+        // enclosing app names them for the editor, but the allowlist can only
+        // address a process by its own id, so such an item cannot be hidden.
+        guard let executable = application?.executableURL ?? executableURL(of: pid) else { return nil }
+        var url = executable
+        while url.path != "/" {
+            if url.pathExtension == "app", let bundleID = Bundle(url: url)?.bundleIdentifier {
+                return Host(bundleID: bundleID,
+                            name: application?.localizedName ?? FileManager.default.displayName(atPath: url.path),
+                            isBundleless: true)
+            }
+            url = url.deletingLastPathComponent()
+        }
+        let name = executable.lastPathComponent
+        return Host(bundleID: name, name: application?.localizedName ?? name, isBundleless: true)
+    }
+
+    private static func executableURL(of pid: pid_t) -> URL? {
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return URL(fileURLWithPath: String(cString: buffer))
+    }
+
+    // MARK: - Accessibility reads
+
+    private static func value(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+        return value
+    }
+
+    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+        value(element, attribute) as? String
+    }
+
+    private static func role(of element: AXUIElement) -> String? {
+        string(element, kAXRoleAttribute)
+    }
+
+    private static func children(of element: AXUIElement) -> [AXUIElement] {
+        value(element, kAXChildrenAttribute) as? [AXUIElement] ?? []
+    }
+
+    private static func pid(of element: AXUIElement) -> pid_t? {
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success, pid > 0 else { return nil }
+        return pid
+    }
+
+    private static func frame(of element: AXUIElement) -> CGRect? {
+        guard let value = value(element, "AXFrame"), CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var rect = CGRect.zero
+        // The type id was checked above, so this downcast cannot fail.
+        guard AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgRect, &rect) else { return nil }
+        return rect
+    }
+}
