@@ -25,6 +25,11 @@ struct UpdatePreviewView: View {
     }
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         VStack(spacing: 0) {
             HStack {
                 Text(l10n.s.tabReleaseNotes)
@@ -58,6 +63,7 @@ struct UpdatePreviewView: View {
         }
         .frame(width: 640, height: 600)
         .background(Color(nsColor: .windowBackgroundColor))
+
     }
 }
 
@@ -74,6 +80,11 @@ struct UpdateShowcaseIntroView: View {
     }
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         VStack(spacing: 0) {
             if step == .demo {
                 showcaseStep
@@ -88,6 +99,7 @@ struct UpdateShowcaseIntroView: View {
             mediaLoader.cancel()
             mediaLoader.cleanupCache()
         }
+
     }
 
     private var showcaseStep: some View {
@@ -167,6 +179,11 @@ struct UpdateSupportIntroView: View {
     @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             UpdateSupportContent()
@@ -186,6 +203,7 @@ struct UpdateSupportIntroView: View {
         }
         .frame(width: 560, height: 420)
         .background(Color(nsColor: .windowBackgroundColor))
+
     }
 }
 

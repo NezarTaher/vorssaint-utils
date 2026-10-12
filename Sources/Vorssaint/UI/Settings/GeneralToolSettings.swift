@@ -17,6 +17,7 @@ struct GeneralToolSettings: View {
             VStack(alignment: .leading, spacing: 20) {
                 switch anchor {
                 case .panelConfiguration:
+                    MenuBarOrganizerSettings()
                     SettingsCard(title: l10n.s.menuBarSection) {
                         Text(text.panelIntro)
                             .font(.callout)

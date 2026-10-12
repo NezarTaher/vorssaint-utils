@@ -342,6 +342,9 @@ if (( TEST )); then
         Sources/Vorssaint/Core/AppAppearance.swift
         Sources/Vorssaint/Core/AppearanceStrings.swift
         Sources/Vorssaint/Core/GeneralSettingsStrings.swift
+        Sources/Vorssaint/Core/MenuBarOrganizerStrings.swift
+        Sources/Vorssaint/App/MenuBarOrganizerVisibility.swift
+        Sources/Vorssaint/App/MenuBarItemSupport.swift
         Sources/Vorssaint/Core/SettingsPageStrings.swift
         Sources/Vorssaint/Core/BatteryTimeStrings.swift
         Sources/Vorssaint/Core/CPUCoreStrings.swift
@@ -387,6 +390,7 @@ if (( TEST )); then
         Sources/Vorssaint/Core/GlobalShortcut.swift
         Sources/Vorssaint/Core/SymbolicHotKeys.swift
         Sources/Vorssaint/Services/SystemShortcutTakeoverSupport.swift
+        Sources/Vorssaint/UI/AppLocalizedView.swift
         Sources/Vorssaint/Core/Localization.swift
         Sources/Vorssaint/Core/Localizations/Strings+*.swift
         Sources/Vorssaint/Core/FeatureStrings.swift
