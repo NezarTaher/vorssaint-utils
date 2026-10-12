@@ -1528,6 +1528,7 @@ extension NotchStrings {
         dropHint: "أسقط الملفات هنا",
         empty: "اختر ما يظهر في إعدادات الجزيرة الديناميكية.",
         volume: "مستوى الصوت",
+        inputSource: "مصدر الإدخال",
         brightness: "السطوع",
         battery: "البطارية",
         onBattery: "على البطارية",

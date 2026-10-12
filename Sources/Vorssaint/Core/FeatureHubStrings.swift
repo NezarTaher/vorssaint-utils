@@ -2080,6 +2080,8 @@ extension FeatureHubStrings {
         footerNote: "إلغاء التثبيت لا يحذف شيئًا؛ تختفي الميزة من التطبيق وتتوقف عن التحميل. أعد تثبيتها في أي وقت ليعود كل شيء كما كان.",
         restartNote: "تبقى الميزات التي ألغيت تثبيتها في هذه الجلسة محملة حتى إعادة تشغيل التطبيق. أعد التشغيل لإزالتها من الذاكرة الآن.",
         restartButton: "إعادة التشغيل الآن",
+        installButton: "تثبيت",
+        uninstallButton: "إلغاء التثبيت",
         installAllButton: "تثبيت الكل",
         uninstallAllButton: "إلغاء تثبيت الكل",
         presetsTitle: "البدء بمجموعة",
