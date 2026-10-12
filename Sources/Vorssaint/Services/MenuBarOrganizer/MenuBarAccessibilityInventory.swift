@@ -4,6 +4,7 @@
 import AppKit
 import ApplicationServices
 import Darwin
+import Security
 
 /// Reads the menu bar items of the main display from MenuBarAgent's
 /// Accessibility tree. On macOS 27 the agent composites the bar itself, so the
@@ -88,7 +89,8 @@ enum MenuBarAccessibilityInventory {
                 bundleID: host.bundleID, identifier: string(leaf, kAXIdentifierAttribute),
                 description: string(leaf, kAXDescriptionAttribute), taken: taken)
             return MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
-                                       appName: host.name, hostIsBundleless: host.isBundleless)
+                                       appName: host.name, hostIsBundleless: host.isBundleless,
+                                       hostIsAppleSigned: host.isAppleSigned)
         }
         for leaf in leaves where role(of: leaf) == kAXGroupRole {
             for extra in children(of: leaf) where role(of: extra) == kAXMenuBarItemRole {
@@ -98,7 +100,7 @@ enum MenuBarAccessibilityInventory {
                                                         identifier: identifier, description: nil, taken: taken)
                 return MenuBarItemSnapshot(identity: identity, frame: frame, pid: agentPID,
                                            appName: string(extra, kAXDescriptionAttribute),
-                                           hostIsBundleless: false)
+                                           hostIsBundleless: false, hostIsAppleSigned: true)
             }
         }
         return nil
@@ -112,12 +114,15 @@ enum MenuBarAccessibilityInventory {
         /// The process has no bundle id of its own; `bundleID` belongs to the
         /// app that encloses its executable.
         let isBundleless: Bool
+        let isAppleSigned: Bool
     }
 
     private static func host(of pid: pid_t) -> Host? {
         let application = NSRunningApplication(processIdentifier: pid)
+        let isAppleSigned = isAppleSigned(pid)
         if let bundleID = application?.bundleIdentifier, !bundleID.isEmpty {
-            return Host(bundleID: bundleID, name: application?.localizedName, isBundleless: false)
+            return Host(bundleID: bundleID, name: application?.localizedName, isBundleless: false,
+                        isAppleSigned: isAppleSigned)
         }
         // Helper agents nested inside another app register no bundle id. The
         // enclosing app names them for the editor, but the allowlist can only
@@ -128,12 +133,36 @@ enum MenuBarAccessibilityInventory {
             if url.pathExtension == "app", let bundleID = Bundle(url: url)?.bundleIdentifier {
                 return Host(bundleID: bundleID,
                             name: application?.localizedName ?? FileManager.default.displayName(atPath: url.path),
-                            isBundleless: true)
+                            isBundleless: true, isAppleSigned: isAppleSigned)
             }
             url = url.deletingLastPathComponent()
         }
         let name = executable.lastPathComponent
-        return Host(bundleID: name, name: application?.localizedName ?? name, isBundleless: true)
+        return Host(bundleID: name, name: application?.localizedName ?? name, isBundleless: true,
+                    isAppleSigned: isAppleSigned)
+    }
+
+    /// Developer ID, App Store and Apple Development signatures, and Apple's own.
+    private static let appleAnchor: SecRequirement? = {
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString("anchor apple generic" as CFString, [], &requirement) == errSecSuccess
+        else { return nil }
+        return requirement
+    }()
+
+    /// Whether the running process is signed with an Apple-issued certificate,
+    /// which is what makes the agent record it as the owner of its items.
+    /// Ad-hoc and self-signed code is not, and neither is anything that cannot
+    /// be checked. Vorssaint's own items count as signed whatever the build:
+    /// the process holding the restriction is assumed to keep its icons.
+    private static func isAppleSigned(_ pid: pid_t) -> Bool {
+        if pid == getpid() { return true }
+        var code: SecCode?
+        let attributes = [kSecGuestAttributePid: pid] as CFDictionary
+        guard let appleAnchor,
+              SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess,
+              let code else { return false }
+        return SecCodeCheckValidity(code, [], appleAnchor) == errSecSuccess
     }
 
     private static func executableURL(of pid: pid_t) -> URL? {

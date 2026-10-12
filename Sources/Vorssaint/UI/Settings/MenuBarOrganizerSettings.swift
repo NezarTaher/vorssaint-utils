@@ -132,6 +132,7 @@ struct MenuBarOrganizerSettings: View {
     @ViewBuilder
     private func row(_ identity: MenuBarItemIdentity, tier: Editor.Tier) -> some View {
         let locked = lockReason(identity)
+        let note = locked ?? unsignedNote(identity)
         let content = HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 11, weight: .semibold))
@@ -141,8 +142,8 @@ struct MenuBarOrganizerSettings: View {
                 .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(name(identity))
-                if let locked {
-                    Text(locked)
+                if let note {
+                    Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -246,6 +247,15 @@ struct MenuBarOrganizerSettings: View {
         guard let item = snapshot(identity),
               !MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID) else { return nil }
         return strings.lockedHelper
+    }
+
+    /// Says that macOS hides the row's icon along with any other, whatever
+    /// its tier. Unlike a lock reason it leaves the row free to move.
+    private func unsignedNote(_ identity: MenuBarItemIdentity) -> String? {
+        switch snapshot(identity).flatMap(Editor.note(for:)) {
+        case .unsigned: strings.lockedUnsigned
+        case nil: nil
+        }
     }
 
     private func name(_ identity: MenuBarItemIdentity) -> String {

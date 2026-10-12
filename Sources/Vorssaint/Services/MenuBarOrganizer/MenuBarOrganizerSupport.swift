@@ -50,6 +50,11 @@ struct MenuBarItemSnapshot: Equatable {
     /// The host process has no LaunchServices bundle id of its own, so the
     /// allowlist cannot address it and the item cannot be hidden.
     let hostIsBundleless: Bool
+    /// The host's code signature chains to an Apple-issued certificate. Only
+    /// then does the menu bar agent record which app owns the item; an item
+    /// without an owner matches no allowlist entry, so macOS hides it under
+    /// any restriction and nothing in the allowlist can bring it back.
+    let hostIsAppleSigned: Bool
 
     /// Drawn by the menu bar agent itself.
     var isSystem: Bool { identity.bundleID == MenuBarOrganizerPolicy.agentBundleID }
@@ -417,6 +422,16 @@ enum MenuBarOrganizerEditorSupport {
         case hide
         /// Not in the bar at all.
         case never
+    }
+
+    /// What a row says under its name without being locked.
+    enum Note {
+        /// macOS hides the item whenever anything is hidden, in every tier.
+        case unsigned
+    }
+
+    static func note(for item: MenuBarItemSnapshot) -> Note? {
+        item.hostIsAppleSigned ? nil : .unsigned
     }
 
     static func tier(of identity: MenuBarItemIdentity, in layout: MenuBarLayout) -> Tier? {

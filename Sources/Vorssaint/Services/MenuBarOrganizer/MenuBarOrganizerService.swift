@@ -76,6 +76,7 @@ final class MenuBarOrganizerService: ObservableObject {
     private static let launchRevealWindow: TimeInterval = 2.5
     /// Launches in a burst share one reveal, which may stretch this far.
     private static let launchRevealLimit: TimeInterval = 6
+    private static let logBundlesPerLine = 15
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "vorssaint",
                                     category: "menu-bar-organizer")
     private static let moverQueue = DispatchQueue(label: "com.vorssaint.menu-bar-organizer.mover",
@@ -98,6 +99,7 @@ final class MenuBarOrganizerService: ObservableObject {
     private var launchRevealDeadline: TimeInterval = 0
     private var applyCancellation: Cancellation?
     private var workspaceTokens: [NSObjectProtocol] = []
+    private var launchObserver: NSKeyValueObservation?
     private var accessibilityObserver: AnyCancellable?
 
     private init() {
@@ -133,12 +135,6 @@ final class MenuBarOrganizerService: ObservableObject {
 
         let center = NSWorkspace.shared.notificationCenter
         workspaceTokens = [
-            center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
-                               object: nil, queue: .main) { [weak self] note in
-                guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-                else { return }
-                self?.applicationLaunched(app)
-            },
             center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
                                object: nil, queue: .main) { [weak self] _ in
                 self?.refreshManagers()
@@ -148,6 +144,16 @@ final class MenuBarOrganizerService: ObservableObject {
                 self?.reassertAfterWake()
             }
         ]
+        // Not didLaunchApplicationNotification: it stays silent for accessory
+        // apps, the very ones that own menu bar icons. The change carries the
+        // whole list or only the insertions, and either way what was not
+        // there before has launched.
+        launchObserver = NSWorkspace.shared.observe(\.runningApplications, options: [.old, .new]) { [weak self] _, change in
+            let known = Set(change.oldValue ?? [])
+            let launched = (change.newValue ?? []).filter { !known.contains($0) }
+            guard !launched.isEmpty else { return }
+            DispatchQueue.main.async { launched.forEach { self?.applicationLaunched($0) } }
+        }
         accessibilityObserver = Permissions.shared.$accessibility
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -165,6 +171,7 @@ final class MenuBarOrganizerService: ObservableObject {
         guard state != .off else { return }
         workspaceTokens.forEach(NSWorkspace.shared.notificationCenter.removeObserver)
         workspaceTokens = []
+        launchObserver = nil
         accessibilityObserver = nil
         collapser.remove()
         state = .off
@@ -249,8 +256,16 @@ final class MenuBarOrganizerService: ObservableObject {
             never-shown bundles \(never.bundles.sorted(), privacy: .public) \
             system \(Self.indices(never.systemItems), privacy: .public); \
             allowed system \(allowed.systemItems, privacy: .public); \
-            allowed \(allowed.bundles.count, privacy: .public) bundles \(allowed.bundles, privacy: .public)
+            allowed \(allowed.bundles.count, privacy: .public) bundles
             """)
+        // The log cuts a message at about 1024 bytes, and every running app
+        // is allowed: the list goes out in lines short enough to stay whole.
+        let lines = stride(from: 0, to: allowed.bundles.count, by: Self.logBundlesPerLine).map {
+            allowed.bundles[$0..<min($0 + Self.logBundlesPerLine, allowed.bundles.count)].joined(separator: ", ")
+        }
+        for (index, line) in lines.enumerated() {
+            Self.log.notice("allowed bundles \(index + 1, privacy: .public)/\(lines.count, privacy: .public): \(line, privacy: .public)")
+        }
         let token = epoch
         assertion.activate(bundles: allowed.bundles, systemItems: allowed.systemItems) { [weak self] failure in
             Self.log.notice("activate (\(purpose, privacy: .public)) result: \(failure ?? "ok", privacy: .public)")
@@ -379,7 +394,7 @@ final class MenuBarOrganizerService: ObservableObject {
     }
 
     /// One line per item, left to right:
-    /// bundle | identity | pid | bundleless | system index.
+    /// bundle | identity | pid | bundleless | signature | system index.
     private static func logInventory(_ items: [MenuBarItemSnapshot]) {
         log.notice("inventory: \(items.count, privacy: .public) items")
         for item in items {
@@ -387,7 +402,7 @@ final class MenuBarOrganizerService: ObservableObject {
             log.notice("""
                   \(item.identity.bundleID, privacy: .public) | \(item.identity.title, privacy: .public) | \
                 \(item.pid, privacy: .public) | \(item.hostIsBundleless ? "bundleless" : "bundled", privacy: .public) | \
-                \(system, privacy: .public)
+                \(item.hostIsAppleSigned ? "apple-signed" : "unsigned", privacy: .public) | \(system, privacy: .public)
                 """)
         }
     }
@@ -432,8 +447,14 @@ final class MenuBarOrganizerService: ObservableObject {
     /// reaches the bar. So a launch lifts the restriction briefly, waits for
     /// the new icon and restores what it lifted: a collapsed bar collapses
     /// again, which also puts the icon on its side of the collapser, and an
-    /// expanded one takes the never-shown icons back out.
+    /// expanded one takes the never-shown icons back out. Called for every
+    /// new process the workspace lists, whatever its activation policy: the
+    /// apps that own menu bar icons are mostly accessory apps.
     private func applicationLaunched(_ app: NSRunningApplication) {
+        Self.log.notice("""
+            launch seen: \(app.bundleIdentifier ?? "-", privacy: .public) \
+            pid \(app.processIdentifier, privacy: .public) policy \(app.activationPolicy.rawValue, privacy: .public)
+            """)
         refreshManagers()
         guard let bundleID = app.bundleIdentifier, bundleID != ownBundleID else { return }
         let now = ProcessInfo.processInfo.systemUptime

@@ -56,8 +56,9 @@ enum MenuBarOrganizerStringsTests {
                                strings.systemScreenMirroring, strings.systemControlCenter]
             suite.expect(Set(systemNames).count == systemNames.count,
                          "\(prefix): every system item has a name of its own")
-            suite.expect(Set([strings.lockedSystem, strings.lockedPinned, strings.lockedOwn, strings.lockedHelper]).count == 4,
-                         "\(prefix): every lock reason reads differently")
+            suite.expect(Set([strings.lockedSystem, strings.lockedPinned, strings.lockedOwn, strings.lockedHelper,
+                              strings.lockedUnsigned]).count == 5,
+                         "\(prefix): every lock reason and the unsigned note read differently")
 
             if language != .enUS {
                 suite.expect(strings.title != english.title

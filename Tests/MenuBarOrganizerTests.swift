@@ -13,10 +13,12 @@ enum MenuBarOrganizerTests {
     }
 
     private static func item(_ bundle: String, _ title: String = "Item-0", x: CGFloat,
-                             width: CGFloat = 30, bundleless: Bool = false) -> MenuBarItemSnapshot {
+                             width: CGFloat = 30, bundleless: Bool = false,
+                             appleSigned: Bool = true) -> MenuBarItemSnapshot {
         MenuBarItemSnapshot(identity: identity(bundle, title),
                             frame: CGRect(x: x, y: 0, width: width, height: 33),
-                            pid: 100, appName: bundle, hostIsBundleless: bundleless)
+                            pid: 100, appName: bundle, hostIsBundleless: bundleless,
+                            hostIsAppleSigned: appleSigned)
     }
 
     private static func system(_ suffix: String) -> MenuBarItemIdentity {
@@ -100,7 +102,8 @@ enum MenuBarOrganizerTests {
                      "an unknown extra and an app borrowing a system name are no system items")
 
         func snapshot(_ identity: MenuBarItemIdentity) -> MenuBarItemSnapshot {
-            MenuBarItemSnapshot(identity: identity, frame: .zero, pid: 1, appName: nil, hostIsBundleless: false)
+            MenuBarItemSnapshot(identity: identity, frame: .zero, pid: 1, appName: nil, hostIsBundleless: false,
+                                hostIsAppleSigned: true)
         }
         func verdict(_ identity: MenuBarItemIdentity) -> [Bool] {
             [MenuBarOrganizerPolicy.canHide(snapshot(identity), ownBundleID: own), MenuBarOrganizerPolicy.isMovable(identity)]
@@ -330,6 +333,9 @@ enum MenuBarOrganizerTests {
                           MenuBarHiddenRecord(identity: delta, appName: "Delta")]
         suite.expect(Editor.baseline(layout: layout, lastHidden: remembered, neverShown: [], collapsed: false) == layout,
                      "an open bar is drawn as it was read")
+        suite.expect(Editor.note(for: item("com.example.adhoc", x: 0, appleSigned: false)) == .unsigned
+                        && Editor.note(for: item("com.example.alpha", x: 0)) == nil,
+                     "only an item macOS cannot attribute to its app carries the unsigned note")
         suite.expect(Editor.baseline(layout: layout, lastHidden: remembered, neverShown: [], collapsed: true).hidden
                         == layout.hidden + [delta],
                      "a collapsed bar adds only the remembered items the partition lacks")
