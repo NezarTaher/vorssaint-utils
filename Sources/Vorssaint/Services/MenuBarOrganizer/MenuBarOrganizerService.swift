@@ -56,17 +56,6 @@ final class MenuBarOrganizerService: ObservableObject {
     var unsupportedReason: MenuBarOrganizerAvailability.Unsupported? { Self.unsupportedReason }
     var isSupported: Bool { Self.unsupportedReason == nil }
 
-    /// String literals until the wiring lands these in `DefaultsKey` and
-    /// `AppFeature`; the values are the contract.
-    private enum Key {
-        static let enabled = "menuBarOrganizerEnabled"
-        static let autoRehideSeconds = "menuBarOrganizerAutoRehideSeconds"
-        /// Machine state: unregistered and kept out of settings backups.
-        static let lastHidden = "menuBarOrganizerLastHidden"
-        /// Raw value of the future `AppFeature.menuBarOrganizer`.
-        static let feature = "menuBarOrganizer"
-    }
-
     private static let quietWalkInterval: TimeInterval = 1
     private static let quietWaitLimit: TimeInterval = 60
     private static let launchPollInterval: TimeInterval = 0.2
@@ -94,9 +83,10 @@ final class MenuBarOrganizerService: ObservableObject {
     private var accessibilityObserver: AnyCancellable?
 
     private init() {
-        lastHidden = MenuBarHiddenRecord.decode(UserDefaults.standard.data(forKey: Key.lastHidden))
+        lastHidden = MenuBarHiddenRecord.decode(UserDefaults.standard.data(forKey: DefaultsKey.menuBarOrganizerLastHidden))
         chevron.onToggle = { [weak self] in self?.toggle() }
         chevron.onOpenSettings = {
+            SettingsRouter.shared.page = .menuBarOrganizer
             (NSApp.delegate as? AppDelegate)?.openSettingsWindow()
         }
     }
@@ -104,11 +94,9 @@ final class MenuBarOrganizerService: ObservableObject {
     // MARK: - Lifecycle
 
     func syncWithPreferences() {
-        let defaults = UserDefaults.standard
-        // The wiring replaces the literal with `AppFeature.menuBarOrganizer.isAvailable`.
         let enabled = isSupported
-            && defaults.bool(forKey: DefaultsKey.featureAvailable(Key.feature))
-            && defaults.bool(forKey: Key.enabled)
+            && AppFeature.menuBarOrganizer.isAvailable
+            && UserDefaults.standard.bool(forKey: DefaultsKey.menuBarOrganizerEnabled)
         if enabled {
             start()
         } else {
@@ -305,11 +293,11 @@ final class MenuBarOrganizerService: ObservableObject {
     private func remember(_ records: [MenuBarHiddenRecord]) {
         guard records != lastHidden else { return }
         lastHidden = records
-        UserDefaults.standard.set(MenuBarHiddenRecord.encode(records), forKey: Key.lastHidden)
+        UserDefaults.standard.set(MenuBarHiddenRecord.encode(records), forKey: DefaultsKey.menuBarOrganizerLastHidden)
     }
 
     private func scheduleAutoRehide() {
-        let seconds = UserDefaults.standard.integer(forKey: Key.autoRehideSeconds)
+        let seconds = UserDefaults.standard.integer(forKey: DefaultsKey.menuBarOrganizerAutoRehideSeconds)
         guard seconds > 0 else { return }
         let timer = Timer(timeInterval: TimeInterval(seconds), repeats: false) { [weak self] _ in
             self?.collapse()

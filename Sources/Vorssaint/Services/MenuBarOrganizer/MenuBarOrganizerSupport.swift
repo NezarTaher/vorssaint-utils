@@ -263,6 +263,46 @@ struct MenuBarHiddenRecord: Codable, Equatable {
     }
 }
 
+/// The drawing behind the layout editor in Settings. Nothing moves in the bar
+/// until the drawing is applied, so it is compared with the bar it started from.
+enum MenuBarOrganizerEditorSupport {
+    /// The layout the editor starts from. While icons are hidden the bar
+    /// cannot be read, so remembered hidden items the last partition does not
+    /// know (a relaunch) join the hidden side.
+    static func baseline(layout: MenuBarLayout?, lastHidden: [MenuBarHiddenRecord],
+                         collapsed: Bool) -> MenuBarLayout {
+        var baseline = layout ?? MenuBarLayout(hidden: [], visible: [])
+        guard collapsed else { return baseline }
+        let known = Set(baseline.hidden + baseline.visible)
+        baseline.hidden += lastHidden.map(\.identity).filter { !known.contains($0) }
+        return baseline
+    }
+
+    /// Moves an item to the other side, next to the chevron: one drag, and
+    /// the icons already there keep their order.
+    static func movingAcross(_ identity: MenuBarItemIdentity, in layout: MenuBarLayout) -> MenuBarLayout {
+        var result = layout
+        if let index = result.hidden.firstIndex(of: identity) {
+            result.hidden.remove(at: index)
+            result.visible.insert(identity, at: 0)
+        } else if let index = result.visible.firstIndex(of: identity) {
+            result.visible.remove(at: index)
+            result.hidden.append(identity)
+        }
+        return result
+    }
+
+    /// How many drags applying `draft` to a bar laid out as `baseline` takes.
+    /// System items are left out, as they are when the drags are planned.
+    static func pendingMoves(from baseline: MenuBarLayout, to draft: MenuBarLayout,
+                             chevron: MenuBarItemIdentity) -> Int {
+        let current = (baseline.hidden + [chevron] + baseline.visible)
+            .filter { $0.bundleID != MenuBarOrganizerPolicy.agentBundleID }
+        return MenuBarMovePlanner.plan(current: current,
+                                       target: draft.hidden + [chevron] + draft.visible).count
+    }
+}
+
 enum MenuBarManagerDetection {
     /// Bartender (incl. Setapp), Ice, Ice 2, Thaw, Pelmet, Hidden Bar, Dozer
     /// and MenubarHide. Prefixes, so helper and variant bundles match too.

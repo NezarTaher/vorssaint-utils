@@ -174,16 +174,16 @@ extension MenuBarOrganizerFeatureStrings {
         title: "Organisateur de la barre des menus", hubDescription: "Masquez des icônes de la barre des menus derrière un chevron, réorganisez-les depuis les réglages et retrouvez-les d’un clic. macOS 27 ou ultérieur.",
         enable: "Masquer les icônes de la barre des menus", enableCaption: "Les icônes à gauche du chevron sont masquées. Cliquez sur le chevron pour les afficher.",
         unsupportedOSFormat: "L’Organisateur de la barre des menus nécessite macOS 27 ou ultérieur. Ce Mac utilise macOS %@.", unsupportedAPI: "Cette version de macOS ne fournit pas les commandes de la barre des menus dont l’Organisateur de la barre des menus a besoin.",
-        otherManagerFormat: "%@ est ouvert. Deux gestionnaires de barre des menus qui masquent des icônes en même temps se gênent ; quittez-le d’abord.",
+        otherManagerFormat: "%@ est ouvert. Deux gestionnaires de barre des menus qui masquent des icônes en même temps se gênent\u{00A0}; quittez-le d’abord.",
         hiddenSection: "Masquées", visibleSection: "Affichées", hiddenEmpty: "Rien n’est masqué. Maintenez ⌘ enfoncée et faites glisser une icône à gauche du chevron, ou utilisez Masquer ici.", visibleEmpty: "Aucune icône trouvée. Vérifiez que l’Accessibilité est autorisée.",
         hideItem: "Masquer", showItem: "Afficher", lockedSystem: "Géré par macOS", lockedOwn: "L’icône de Vorssaint reste toujours visible", lockedHelper: "Dessinée par un processus auxiliaire que macOS ne peut pas masquer",
-        apply: "Appliquer", applyPendingFormat: "Appliquer les modifications (%d)", discard: "Annuler", applying: "Déplacement des icônes…", applyReportFormat: "Déplacées : %1$d, échecs : %2$d",
+        apply: "Appliquer", applyPendingFormat: "Appliquer les modifications (%d)", discard: "Annuler", applying: "Déplacement des icônes…", applyReportFormat: "Déplacées\u{00A0}: %1$d, échecs\u{00A0}: %2$d",
         applyHint: "Vorssaint déplace les icônes par glissement avec ⌘. Ne touchez pas à la souris pendant un instant.", dragHint: "Vous pouvez aussi maintenir ⌘ enfoncée et faire glisser les icônes de part et d’autre du chevron dans la barre des menus.",
-        perAppNote: "macOS masque les icônes par app : plusieurs icônes d’une même app sont masquées ensemble.", systemExtrasNote: "Tant que des icônes sont masquées, macOS retire aussi certains de ses propres éléments, comme Concentration. Ils reviennent dès que les icônes sont affichées.",
+        perAppNote: "macOS masque les icônes par app\u{00A0}: plusieurs icônes d’une même app sont masquées ensemble.", systemExtrasNote: "Tant que des icônes sont masquées, macOS retire aussi certains de ses propres éléments, comme Concentration. Ils reviennent dès que les icônes sont affichées.",
         autoRehide: "Masquer à nouveau automatiquement", autoRehideNever: "Jamais", autoRehideSecondsFormat: "Après %d s", showHiddenIcons: "Afficher les icônes masquées", hideIcons: "Masquer les icônes",
         statusCollapsed: "Les icônes sont masquées", statusExpanded: "Les icônes sont affichées", refresh: "Actualiser",
         problemAccessibility: "L’Accessibilité est requise pour lire la barre des menus.", problemChevronNotFound: "Le chevron n’est pas encore dans la barre des menus. Le masquage est en pause.",
-        problemActivationFormat: "Échec du masquage : %@", problemNothingToHide: "Il n’y a rien à gauche du chevron, donc rien n’a été masqué.")
+        problemActivationFormat: "Échec du masquage\u{00A0}: %@", problemNothingToHide: "Il n’y a rien à gauche du chevron, donc rien n’a été masqué.")
     static let it = MenuBarOrganizerFeatureStrings(
         title: "Organizzatore barra dei menu", hubDescription: "Nascondi le icone della barra dei menu dietro una freccia, riordinale dalle Impostazioni e riportale indietro con un clic. macOS 27 o successivo.",
         enable: "Nascondi le icone della barra dei menu", enableCaption: "Le icone a sinistra della freccia vengono nascoste. Fai clic sulla freccia per mostrarle.",

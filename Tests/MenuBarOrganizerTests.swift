@@ -40,6 +40,7 @@ enum MenuBarOrganizerTests {
         dropPoints(suite)
         quietGate(suite)
         hiddenRecords(suite)
+        editor(suite)
         managers(suite)
     }
 
@@ -217,6 +218,45 @@ enum MenuBarOrganizerTests {
                      "hidden records survive their stored form")
         suite.expect(MenuBarHiddenRecord.decode(Data("not json".utf8)).isEmpty && MenuBarHiddenRecord.decode(nil).isEmpty,
                      "unreadable stored records read as none")
+    }
+
+    private static func editor(_ suite: TestSuite) {
+        guard let layout = MenuBarOrganizerLayout.partition(bar, chevron: chevron) else {
+            suite.expect(false, "the reference bar partitions")
+            return
+        }
+        let alpha = identity("com.example.alpha")
+        let gamma = identity("com.example.gamma")
+        let remembered = [MenuBarHiddenRecord(identity: alpha, appName: "Alpha"),
+                          MenuBarHiddenRecord(identity: identity("com.example.delta"), appName: "Delta")]
+        suite.expect(MenuBarOrganizerEditorSupport.baseline(layout: layout, lastHidden: remembered,
+                                                            collapsed: false) == layout,
+                     "an open bar is drawn as it was read")
+        suite.expect(MenuBarOrganizerEditorSupport.baseline(layout: layout, lastHidden: remembered, collapsed: true).hidden
+                        == layout.hidden + [identity("com.example.delta")],
+                     "a collapsed bar adds only the remembered items the partition lacks")
+        suite.expect(MenuBarOrganizerEditorSupport.baseline(layout: nil, lastHidden: remembered, collapsed: true)
+                        == MenuBarLayout(hidden: remembered.map(\.identity), visible: []),
+                     "without a partition a collapsed bar is drawn from memory")
+
+        suite.expect(MenuBarOrganizerEditorSupport.pendingMoves(from: layout, to: layout, chevron: chevron) == 0,
+                     "an untouched drawing has nothing to apply")
+        let shown = MenuBarOrganizerEditorSupport.movingAcross(alpha, in: layout)
+        suite.expect(shown.hidden == Array(layout.hidden.dropFirst()) && shown.visible == [alpha] + layout.visible,
+                     "showing an item puts it right of the chevron")
+        let hidden = MenuBarOrganizerEditorSupport.movingAcross(gamma, in: layout)
+        suite.expect(hidden.hidden == layout.hidden + [gamma] && hidden.visible == Array(layout.visible.dropFirst()),
+                     "hiding an item puts it left of the chevron")
+        suite.expect(MenuBarOrganizerEditorSupport.pendingMoves(from: layout, to: shown, chevron: chevron) == 1
+                        && MenuBarOrganizerEditorSupport.pendingMoves(from: layout, to: hidden, chevron: chevron) == 1,
+                     "crossing the chevron is one drag")
+        var systemShuffled = layout
+        systemShuffled.visible.reverse()
+        let withoutSystem = MenuBarLayout(hidden: layout.hidden,
+                                          visible: systemShuffled.visible.filter { $0.bundleID != MenuBarOrganizerPolicy.agentBundleID })
+        suite.expect(MenuBarOrganizerEditorSupport.pendingMoves(from: layout, to: systemShuffled, chevron: chevron)
+                        == MenuBarOrganizerEditorSupport.pendingMoves(from: layout, to: withoutSystem, chevron: chevron),
+                     "system items never count as a pending drag")
     }
 
     private static func managers(_ suite: TestSuite) {

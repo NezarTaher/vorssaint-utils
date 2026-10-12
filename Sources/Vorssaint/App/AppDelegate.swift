@@ -284,6 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         isTerminating = true
         CommandBarService.shared.restoreBorrowedInputSource()
         if AppFeature.notch.isAvailable { NotchService.shared.stop(restoreCapture: false) }
+        // Hidden menu bar icons come back before the process goes away.
+        if AppFeature.menuBarOrganizer.isAvailable { MenuBarOrganizerService.shared.stop() }
         // Quitting properly means the start worked, whenever it happened.
         endStartupWatch()
         if AppFeature.brightness.isAvailable {

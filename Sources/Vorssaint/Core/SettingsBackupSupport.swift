@@ -108,6 +108,8 @@ enum SettingsBackupSupport {
         DefaultsKey.spacesOrderRestartPending,
         // A Bluetooth restore owed by one sleeping Mac means nothing on another.
         DefaultsKey.bluetoothSleepRestorePending,
+        // The icons one Mac's menu bar had hidden name apps another may not run.
+        DefaultsKey.menuBarOrganizerLastHidden,
         DefaultsKey.micMuteActive,
         DefaultsKey.micMuteSavedVolume,
         // Levels and device ids belong to the microphones of one Mac.

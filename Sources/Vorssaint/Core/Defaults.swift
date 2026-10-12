@@ -306,6 +306,10 @@ enum DefaultsKey {
     static let killProcessGroupRelated = "killProcessGroupRelated"
     static let killProcessSortBy = "killProcessSortBy" // cpu | memory | name | pid
     static let killProcessSortAscending = "killProcessSortAscending"
+    static let menuBarOrganizerEnabled = "menuBarOrganizerEnabled"
+    static let menuBarOrganizerAutoRehideSeconds = "menuBarOrganizerAutoRehideSeconds" // 0 = never
+    /// What the last collapse hid, as JSON. Machine state, never registered.
+    static let menuBarOrganizerLastHidden = "menuBarOrganizerLastHidden"
     static let panelUtilityCleaner = "panelUtilityCleaner"
     static let panelUtilityHomebrew = "panelUtilityHomebrew"
     static let homebrewGroupDependencies = "homebrewGroupDependencies"
@@ -1529,6 +1533,8 @@ enum Defaults {
         DefaultsKey.killProcessGroupRelated: true,
         DefaultsKey.killProcessSortBy: "cpu",
         DefaultsKey.killProcessSortAscending: false,
+        DefaultsKey.menuBarOrganizerEnabled: false,
+        DefaultsKey.menuBarOrganizerAutoRehideSeconds: 0,
         DefaultsKey.panelUtilityCleaner: true,
         DefaultsKey.panelUtilityHomebrew: true,
         DefaultsKey.homebrewGroupDependencies: true,
