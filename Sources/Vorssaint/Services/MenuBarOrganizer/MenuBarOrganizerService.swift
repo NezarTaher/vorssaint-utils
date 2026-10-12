@@ -4,6 +4,7 @@
 import AppKit
 import ApplicationServices
 import Combine
+import os
 
 /// Hides the menu bar icons left of the collapser, shows them again on a click,
 /// keeps the never-shown ones out of the bar altogether and reorders icons on
@@ -15,13 +16,21 @@ import Combine
 /// from the bar. Never-shown icons have no place in the bar to tell them by,
 /// so they are the one list that is stored, and they stay out while the bar
 /// is expanded too. Hiding works per app (the system allowlist takes bundle
-/// ids), which is why Vorssaint's own icons, system items and helper
-/// processes without a bundle id are never hidden.
+/// ids), which is why Vorssaint's own icons and helper processes without a
+/// bundle id are never hidden. The system items the allowlist knows by index
+/// hide and move like an app's; the clock and Control Center, which macOS
+/// pins, and the agent's other items are left alone.
 ///
 /// Every doubt resolves towards a visible bar: an empty walk, a missing
 /// collapser, a refused activation or a revoked permission drops the
 /// restriction, never-shown icons included. Main thread only, like the other services; the Accessibility
 /// walks and the drags run on background queues.
+///
+/// Every inventory, activation and release is logged, at the level the
+/// system keeps on disk. To read what the organizer saw and decided (the
+/// subsystem is the bundle id, `com.vorssaint.utils.dev` in a Developer build):
+///
+///     log show --last 10m --predicate 'subsystem == "com.vorssaint.utils" AND category == "menu-bar-organizer"' --style compact
 final class MenuBarOrganizerService: ObservableObject {
     static let shared = MenuBarOrganizerService()
 
@@ -67,6 +76,8 @@ final class MenuBarOrganizerService: ObservableObject {
     private static let launchRevealWindow: TimeInterval = 2.5
     /// Launches in a burst share one reveal, which may stretch this far.
     private static let launchRevealLimit: TimeInterval = 6
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "vorssaint",
+                                    category: "menu-bar-organizer")
     private static let moverQueue = DispatchQueue(label: "com.vorssaint.menu-bar-organizer.mover",
                                                   qos: .userInitiated)
 
@@ -78,7 +89,8 @@ final class MenuBarOrganizerService: ObservableObject {
     private var epoch = 0
     private var quietGate = MenuBarQuietGate()
     private var rehideTimer: Timer?
-    private var hiddenBundles = Set<String>()
+    /// What the last collapse hid, kept for the wake re-assert.
+    private var hidden = MenuBarHiddenSet()
     /// Bundles launched while icons were hidden whose icons the open bar is
     /// waiting for.
     private var awaitedLaunches = Set<String>()
@@ -149,7 +161,7 @@ final class MenuBarOrganizerService: ObservableObject {
     /// including on quit and while a reorder pass is running.
     func stop() {
         advance()
-        assertion.release()
+        release("stop")
         guard state != .off else { return }
         workspaceTokens.forEach(NSWorkspace.shared.notificationCenter.removeObserver)
         workspaceTokens = []
@@ -191,7 +203,7 @@ final class MenuBarOrganizerService: ObservableObject {
         // A collapse that was still waiting never restricted the bar, and a
         // bar that is still settling must stay unrestricted.
         guard wasCollapsed else {
-            assertion.release()
+            release("expand while settling")
             return
         }
         restrictExpanded()
@@ -208,26 +220,53 @@ final class MenuBarOrganizerService: ObservableObject {
     /// restriction is dropped. A restriction already held stays until the new
     /// one is live, so never-shown icons do not flash when the bar expands.
     private func restrictExpanded() {
-        guard let allowed = allowlist(hiding: []) else {
-            assertion.release()
-            return
+        let restricted = activate(hiding: MenuBarHiddenSet(), for: "expanded") { [weak self] failure in
+            guard let failure else { return }
+            self?.failOpen(.activationFailed(failure))
         }
-        let token = epoch
-        assertion.activate(bundles: allowed.bundles, systemItems: allowed.systemItems) { [weak self] failure in
-            guard let self, self.epoch == token, let failure else { return }
-            self.failOpen(.activationFailed(failure))
-        }
+        if !restricted { release("nothing is never shown") }
     }
 
-    /// Allowlist that keeps out `hidden` and the never-shown apps, judged by
-    /// the last inventory. nil when that hides nothing.
-    private func allowlist(hiding hidden: Set<String>) -> (bundles: [String], systemItems: [Int])? {
-        let never = MenuBarOrganizerLayout.neverShownBundles(
+    /// Restricts the bar to everything but `hidden` and the never-shown apps
+    /// and system items, judged by the last inventory. False, with nothing
+    /// done, when that hides nothing. `completion` is skipped when the course
+    /// changed before the answer.
+    private func activate(hiding hidden: MenuBarHiddenSet, for purpose: String,
+                          completion: @escaping (String?) -> Void) -> Bool {
+        let never = MenuBarOrganizerLayout.neverShown(
             in: MenuBarLayout(hidden: [], visible: [], neverShown: neverShown.map(\.identity)),
             items: inventory, known: neverShown, ownBundleID: ownBundleID)
-        return MenuBarOrganizerLayout.allowlist(hiddenBundles: hidden, neverShownBundles: never,
-                                                observed: inventory, running: runningBundles(),
-                                                ownBundleID: ownBundleID)
+        guard let allowed = MenuBarOrganizerLayout.allowlist(hidden: hidden, neverShown: never,
+                                                             observed: inventory, running: runningBundles(),
+                                                             ownBundleID: ownBundleID) else {
+            Self.log.notice("activate (\(purpose, privacy: .public)): nothing to hide")
+            return false
+        }
+        Self.log.notice("""
+            activate (\(purpose, privacy: .public)): \
+            hidden bundles \(hidden.bundles.sorted(), privacy: .public) \
+            system \(Self.indices(hidden.systemItems), privacy: .public); \
+            never-shown bundles \(never.bundles.sorted(), privacy: .public) \
+            system \(Self.indices(never.systemItems), privacy: .public); \
+            allowed system \(allowed.systemItems, privacy: .public); \
+            allowed \(allowed.bundles.count, privacy: .public) bundles \(allowed.bundles, privacy: .public)
+            """)
+        let token = epoch
+        assertion.activate(bundles: allowed.bundles, systemItems: allowed.systemItems) { [weak self] failure in
+            Self.log.notice("activate (\(purpose, privacy: .public)) result: \(failure ?? "ok", privacy: .public)")
+            guard let self, self.epoch == token else { return }
+            completion(failure)
+        }
+        return true
+    }
+
+    private func release(_ reason: String) {
+        Self.log.notice("release (\(reason, privacy: .public)), was active: \(self.assertion.isActive, privacy: .public)")
+        assertion.release()
+    }
+
+    private static func indices(_ items: Set<MenuBarSystemItem>) -> [Int] {
+        items.map(\.rawValue).sorted()
     }
 
     /// Re-reads the bar for the editor. Only an expanded bar is read: while
@@ -265,7 +304,7 @@ final class MenuBarOrganizerService: ObservableObject {
             guard let self, self.epoch == token, self.state == .expanded else { return }
             let waited = ProcessInfo.processInfo.systemUptime - started
             if self.quietGate.observe(items.map(\.identity)) || waited >= Self.quietWaitLimit {
-                self.collapse(with: items, token: token)
+                self.collapse(with: items)
                 return
             }
             self.adopt(items)
@@ -284,11 +323,13 @@ final class MenuBarOrganizerService: ObservableObject {
         }
         MenuBarAccessibilityInventory.walk { [weak self] items in
             guard let self, self.epoch == token else { return }
-            self.collapse(with: items, token: token)
+            self.collapse(with: items)
         }
     }
 
-    private func collapse(with items: [MenuBarItemSnapshot], token: Int) {
+    /// Collapses a bar that was just walked. Callers have checked that the
+    /// walk was not overtaken.
+    private func collapse(with items: [MenuBarItemSnapshot]) {
         guard !items.isEmpty else {
             failOpen(AXIsProcessTrusted() ? .collapserNotFound : .accessibilityMissing)
             return
@@ -298,15 +339,9 @@ final class MenuBarOrganizerService: ObservableObject {
             failOpen(.collapserNotFound)
             return
         }
-        let hidden = MenuBarOrganizerLayout.hiddenBundles(in: layout, items: items, ownBundleID: ownBundleID)
-        guard let allowed = allowlist(hiding: hidden) else {
-            failOpen(.nothingToHide)
-            return
-        }
-        hiddenBundles = hidden
-        remember(MenuBarHiddenRecord.records(for: layout, items: items, ownBundleID: ownBundleID))
-        assertion.activate(bundles: allowed.bundles, systemItems: allowed.systemItems) { [weak self] failure in
-            guard let self, self.epoch == token else { return }
+        let toHide = MenuBarOrganizerLayout.hidden(in: layout, items: items, ownBundleID: ownBundleID)
+        let restricted = activate(hiding: toHide, for: "collapse") { [weak self] failure in
+            guard let self else { return }
             if let failure {
                 self.failOpen(.activationFailed(failure))
                 return
@@ -315,23 +350,46 @@ final class MenuBarOrganizerService: ObservableObject {
             self.state = .collapsed
             self.collapser.setCollapsed(true)
         }
+        guard restricted else {
+            failOpen(.nothingToHide)
+            return
+        }
+        hidden = toHide
+        remember(MenuBarHiddenRecord.records(for: layout, items: items, ownBundleID: ownBundleID))
     }
 
     /// Shows the whole bar, never-shown icons included, and says why hiding
     /// is paused.
     private func failOpen(_ reason: Problem) {
-        assertion.release()
+        release("fail open: \(reason)")
         problem = reason
         if state == .collapsed { state = .expanded }
         collapser.setCollapsed(false)
     }
 
     private func adopt(_ items: [MenuBarItemSnapshot]) {
-        if inventory != items { inventory = items }
+        if inventory != items {
+            inventory = items
+            Self.logInventory(items)
+        }
         let partition = MenuBarOrganizerCollapser.identity.flatMap {
             MenuBarOrganizerLayout.partition(items, collapser: $0)
         }
         if layout != partition { layout = partition }
+    }
+
+    /// One line per item, left to right:
+    /// bundle | identity | pid | bundleless | system index.
+    private static func logInventory(_ items: [MenuBarItemSnapshot]) {
+        log.notice("inventory: \(items.count, privacy: .public) items")
+        for item in items {
+            let system = MenuBarSystemItem.item(for: item.identity).map { String($0.rawValue) } ?? "-"
+            log.notice("""
+                  \(item.identity.bundleID, privacy: .public) | \(item.identity.title, privacy: .public) | \
+                \(item.pid, privacy: .public) | \(item.hostIsBundleless ? "bundleless" : "bundled", privacy: .public) | \
+                \(system, privacy: .public)
+                """)
+        }
     }
 
     private func remember(_ records: [MenuBarHiddenRecord]) {
@@ -393,7 +451,8 @@ final class MenuBarOrganizerService: ObservableObject {
         awaitedLaunches = [bundleID]
         launchRevealStarted = now
         launchRevealDeadline = now + Self.launchRevealWindow
-        assertion.release()
+        Self.log.notice("launch reveal starts for \(bundleID, privacy: .public)")
+        release("launch reveal")
         pollForLaunchedItems(token: token)
     }
 
@@ -408,9 +467,11 @@ final class MenuBarOrganizerService: ObservableObject {
                     self.pollForLaunchedItems(token: token)
                     return
                 }
+                let missing = self.awaitedLaunches.subtracting(present).sorted()
+                Self.log.notice("launch reveal ends, expired: \(expired, privacy: .public), no icon from \(missing, privacy: .public)")
                 self.awaitedLaunches.removeAll()
                 if self.state == .collapsed {
-                    self.collapse(with: items, token: token)
+                    self.collapse(with: items)
                 } else {
                     self.adopt(items)
                     self.restrictExpanded()
@@ -426,15 +487,12 @@ final class MenuBarOrganizerService: ObservableObject {
     private func reassertAfterWake() {
         guard state == .collapsed || (state == .expanded && assertion.isActive),
               awaitedLaunches.isEmpty else { return }
-        guard let allowed = allowlist(hiding: state == .collapsed ? hiddenBundles : []) else {
-            expand()
-            return
+        let restricted = activate(hiding: state == .collapsed ? hidden : MenuBarHiddenSet(),
+                                  for: "wake") { [weak self] failure in
+            guard let failure else { return }
+            self?.failOpen(.activationFailed(failure))
         }
-        let token = epoch
-        assertion.activate(bundles: allowed.bundles, systemItems: allowed.systemItems) { [weak self] failure in
-            guard let self, self.epoch == token, let failure else { return }
-            self.failOpen(.activationFailed(failure))
-        }
+        if !restricted { expand() }
     }
 
     private func accessibilityChanged(_ granted: Bool) {
@@ -472,7 +530,8 @@ final class MenuBarOrganizerService: ObservableObject {
     /// order, then reports how many moves landed. Every icon is shown for the
     /// pass, because only an icon that is in the bar can be dragged, and the
     /// bar is restricted again afterwards. Never-shown icons are not part of
-    /// the order; the planner leaves them at the left end.
+    /// the order; the planner leaves them at the left end. The system items
+    /// macOS does not pin are dragged like any other icon.
     func apply(_ target: MenuBarLayout) {
         guard state == .expanded || state == .collapsed,
               let collapserIdentity = MenuBarOrganizerCollapser.identity else { return }
@@ -486,7 +545,8 @@ final class MenuBarOrganizerService: ObservableObject {
         // Names come from the inventory, then from what was remembered.
         rememberNeverShown(MenuBarHiddenRecord.records(for: target.neverShown, items: inventory,
                                                        known: neverShown + lastHidden, ownBundleID: ownBundleID))
-        assertion.release()
+        Self.log.notice("apply starts, was collapsed: \(wasCollapsed, privacy: .public), restricted: \(wasRestricted, privacy: .public)")
+        release("apply")
         state = .applying
         collapser.setCollapsed(false)
         lastApplyReport = nil
@@ -496,6 +556,7 @@ final class MenuBarOrganizerService: ObservableObject {
         applyCancellation = cancellation
         Self.moverQueue.async { [weak self] in
             let report = Self.reorder(to: order, afterReveal: wasRestricted, cancellation: cancellation)
+            Self.log.notice("apply report: \(report.moved, privacy: .public) moved, \(report.failed, privacy: .public) failed")
             DispatchQueue.main.async {
                 guard let self, self.epoch == token, self.state == .applying else { return }
                 self.applyCancellation = nil
@@ -524,7 +585,7 @@ final class MenuBarOrganizerService: ObservableObject {
     private static func reorder(to target: [MenuBarItemIdentity], afterReveal: Bool,
                                 cancellation: Cancellation) -> (moved: Int, failed: Int) {
         func movableItems() -> [MenuBarItemSnapshot] {
-            MenuBarAccessibilityInventory.walkNow().filter(MenuBarOrganizerPolicy.isMovable)
+            MenuBarAccessibilityInventory.walkNow().filter { MenuBarOrganizerPolicy.isMovable($0.identity) }
         }
         if afterReveal { waitForReturningItems() }
         var items = movableItems()

@@ -53,17 +53,22 @@ enum MenuBarAccessibilityInventory {
             role(of: $0) == kAXWindowRole && frame(of: $0)?.origin == origin
         }) else { return [] }
 
+        // Left to right before anything is named: an unnamed item is numbered
+        // by its place among its app's items.
+        let groups = children(of: window)
+            .compactMap { group in frame(of: group).map { (group: group, frame: $0) } }
+            .filter { $0.frame.width > 0 }
+            .sorted { $0.frame.minX < $1.frame.minX }
         var items: [MenuBarItemSnapshot] = []
         var taken = Set<MenuBarItemIdentity>()
         var hosts: [pid_t: Host?] = [:]
-        for group in children(of: window) {
-            guard let frame = frame(of: group), frame.width > 0,
-                  let item = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
+        for (group, frame) in groups {
+            guard let item = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
             else { continue }
             taken.insert(item.identity)
             items.append(item)
         }
-        return items.sorted { $0.frame.minX < $1.frame.minX }
+        return items
     }
 
     // MARK: - Classification
@@ -78,11 +83,10 @@ enum MenuBarAccessibilityInventory {
             guard let pid = pid(of: leaf), pid != agentPID else { continue }
             if hosts[pid] == nil { hosts[pid] = .some(host(of: pid)) }
             guard let host = hosts[pid] ?? nil else { continue }
+            // Not the title: apps rewrite it, and the identity must not change.
             let identity = MenuBarItemIdentity.make(
-                bundleID: host.bundleID,
-                candidates: [string(leaf, kAXTitleAttribute), string(leaf, kAXIdentifierAttribute),
-                             string(leaf, kAXDescriptionAttribute)],
-                taken: taken)
+                bundleID: host.bundleID, identifier: string(leaf, kAXIdentifierAttribute),
+                description: string(leaf, kAXDescriptionAttribute), taken: taken)
             return MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
                                        appName: host.name, hostIsBundleless: host.isBundleless)
         }
@@ -91,7 +95,7 @@ enum MenuBarAccessibilityInventory {
                 guard let identifier = string(extra, kAXIdentifierAttribute),
                       identifier.hasPrefix(systemIdentifierPrefix) else { continue }
                 let identity = MenuBarItemIdentity.make(bundleID: MenuBarOrganizerPolicy.agentBundleID,
-                                                        candidates: [identifier], taken: taken)
+                                                        identifier: identifier, description: nil, taken: taken)
                 return MenuBarItemSnapshot(identity: identity, frame: frame, pid: agentPID,
                                            appName: string(extra, kAXDescriptionAttribute),
                                            hostIsBundleless: false)

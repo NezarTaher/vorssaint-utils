@@ -237,6 +237,9 @@ struct MenuBarOrganizerSettings: View {
 
     /// Why a row cannot be hidden, dragged or kept out of the bar, nil when it can.
     private func lockReason(_ identity: MenuBarItemIdentity) -> String? {
+        if let system = MenuBarSystemItem.item(for: identity) {
+            return system.isPinned ? strings.lockedPinned : nil
+        }
         if identity.bundleID == MenuBarOrganizerPolicy.agentBundleID { return strings.lockedSystem }
         if identity.bundleID == ownBundleID { return strings.lockedOwn }
         // Only items that hide are remembered, so one without a snapshot does.
@@ -246,6 +249,7 @@ struct MenuBarOrganizerSettings: View {
     }
 
     private func name(_ identity: MenuBarItemIdentity) -> String {
+        if let system = MenuBarSystemItem.item(for: identity) { return systemName(system) }
         let appName = snapshot(identity)?.appName
             ?? (service.lastHidden + service.neverShown).first { $0.identity == identity }?.appName
             ?? identity.title
@@ -257,7 +261,10 @@ struct MenuBarOrganizerSettings: View {
 
     @ViewBuilder
     private func appIcon(_ identity: MenuBarItemIdentity) -> some View {
-        if identity.bundleID != MenuBarOrganizerPolicy.agentBundleID, let url = bundleURL(identity) {
+        if let system = MenuBarSystemItem.item(for: identity) {
+            Image(systemName: system.symbol)
+                .foregroundStyle(.secondary)
+        } else if identity.bundleID != MenuBarOrganizerPolicy.agentBundleID, let url = bundleURL(identity) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                 .resizable()
         } else {
@@ -288,6 +295,20 @@ struct MenuBarOrganizerSettings: View {
         case .dots: return strings.iconDots
         case .lines: return strings.iconLines
         case .grid: return strings.iconGrid
+        }
+    }
+
+    private func systemName(_ item: MenuBarSystemItem) -> String {
+        switch item {
+        case .battery: return strings.systemBattery
+        case .bluetooth: return strings.systemBluetooth
+        case .clock: return strings.systemClock
+        case .displays: return strings.systemDisplays
+        case .keyboard: return strings.systemKeyboard
+        case .sound: return strings.systemSound
+        case .wifi: return strings.systemWiFi
+        case .screenMirroring: return strings.systemScreenMirroring
+        case .controlCenter: return strings.systemControlCenter
         }
     }
 

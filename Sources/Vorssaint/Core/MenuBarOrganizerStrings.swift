@@ -32,8 +32,20 @@ struct MenuBarOrganizerFeatureStrings {
     let tierHide: String
     let tierNever: String
     let lockedSystem: String
+    /// The clock and Control Center, which macOS does not let anyone move.
+    let lockedPinned: String
     let lockedOwn: String
     let lockedHelper: String
+    /// The system items as the editor rows name them.
+    let systemBattery: String
+    let systemBluetooth: String
+    let systemClock: String
+    let systemDisplays: String
+    let systemKeyboard: String
+    let systemSound: String
+    let systemWiFi: String
+    let systemScreenMirroring: String
+    let systemControlCenter: String
     let apply: String
     /// One `%d`: how many items changed position.
     let applyPendingFormat: String
@@ -94,7 +106,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Hide", hideCaption: "Left of the collapse icon. Hidden until you click it, hidden again when you click again.", hideEmpty: "Drop icons here, or ⌘-drag them left of the collapse icon in the bar.",
         neverSection: "Never show", neverCaption: "Not in the bar at all, not even while the hidden icons are shown. Applies to every icon of that app.", neverEmpty: "Nothing is hidden for good.",
         tierShow: "Show always", tierHide: "Hide", tierNever: "Never show",
-        lockedSystem: "Managed by macOS", lockedOwn: "Vorssaint’s own icon stays visible", lockedHelper: "Drawn by a helper process macOS cannot hide",
+        lockedSystem: "Managed by macOS", lockedPinned: "macOS keeps this at the end of the bar.", lockedOwn: "Vorssaint’s own icon stays visible", lockedHelper: "Drawn by a helper process macOS cannot hide",
+        systemBattery: "Battery", systemBluetooth: "Bluetooth", systemClock: "Clock", systemDisplays: "Displays", systemKeyboard: "Input menu", systemSound: "Sound", systemWiFi: "Wi-Fi", systemScreenMirroring: "Screen Mirroring", systemControlCenter: "Control Center",
         apply: "Apply", applyPendingFormat: "Apply changes (%d)", discard: "Discard", applying: "Moving icons…", applyReportFormat: "%1$d moved, %2$d failed",
         applyHint: "Vorssaint moves icons with ⌘-drags. Keep your hands off the mouse for a moment.", dragHint: "You can also hold ⌘ and drag icons across the collapse icon in the menu bar.",
         perAppNote: "macOS hides icons per app: several icons from one app hide together.", systemExtrasNote: "While icons are hidden, macOS also removes some of its own extras, such as Focus. They return when the icons are shown.",
@@ -112,7 +125,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Ocultar", hideCaption: "À esquerda do ícone de recolher. Ocultos até você clicar nele, ocultos de novo quando você clica outra vez.", hideEmpty: "Solte ícones aqui ou arraste-os com ⌘ para a esquerda do ícone de recolher na barra.",
         neverSection: "Nunca mostrar", neverCaption: "Fora da barra, mesmo enquanto os ícones ocultos são mostrados. Vale para todos os ícones do app.", neverEmpty: "Nada está oculto de forma permanente.",
         tierShow: "Mostrar sempre", tierHide: "Ocultar", tierNever: "Nunca mostrar",
-        lockedSystem: "Gerenciado pelo macOS", lockedOwn: "O ícone do Vorssaint fica sempre visível", lockedHelper: "Desenhado por um processo auxiliar que o macOS não consegue ocultar",
+        lockedSystem: "Gerenciado pelo macOS", lockedPinned: "O macOS mantém este item no fim da barra.", lockedOwn: "O ícone do Vorssaint fica sempre visível", lockedHelper: "Desenhado por um processo auxiliar que o macOS não consegue ocultar",
+        systemBattery: "Bateria", systemBluetooth: "Bluetooth", systemClock: "Relógio", systemDisplays: "Telas", systemKeyboard: "Menu de entrada", systemSound: "Som", systemWiFi: "Wi-Fi", systemScreenMirroring: "Espelhamento de Tela", systemControlCenter: "Central de Controle",
         apply: "Aplicar", applyPendingFormat: "Aplicar alterações (%d)", discard: "Descartar", applying: "Movendo ícones…", applyReportFormat: "Movidos: %1$d, com falha: %2$d",
         applyHint: "O Vorssaint move os ícones arrastando com ⌘. Não toque no mouse por um instante.", dragHint: "Você também pode manter ⌘ pressionada e arrastar ícones de um lado para o outro do ícone de recolher na barra de menus.",
         perAppNote: "O macOS oculta ícones por app: vários ícones do mesmo app são ocultados juntos.", systemExtrasNote: "Enquanto os ícones estão ocultos, o macOS também remove alguns dos seus próprios itens, como o Foco. Eles voltam quando os ícones são mostrados.",
@@ -130,7 +144,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Gizle", hideCaption: "Daraltma simgesinin solunda. Simgeye tıklayana kadar gizli kalır, yeniden tıkladığınızda tekrar gizlenir.", hideEmpty: "Simgeleri buraya bırakın veya çubukta ⌘ ile daraltma simgesinin soluna sürükleyin.",
         neverSection: "Asla gösterme", neverCaption: "Çubukta hiç yer almaz, gizli simgeler gösterilirken bile. Uygulamanın tüm simgeleri için geçerlidir.", neverEmpty: "Kalıcı olarak gizlenen simge yok.",
         tierShow: "Her zaman göster", tierHide: "Gizle", tierNever: "Asla gösterme",
-        lockedSystem: "macOS tarafından yönetiliyor", lockedOwn: "Vorssaint’in kendi simgesi hep görünür kalır", lockedHelper: "macOS’in gizleyemediği bir yardımcı işlem tarafından çiziliyor",
+        lockedSystem: "macOS tarafından yönetiliyor", lockedPinned: "macOS bunu çubuğun sonunda tutar.", lockedOwn: "Vorssaint’in kendi simgesi hep görünür kalır", lockedHelper: "macOS’in gizleyemediği bir yardımcı işlem tarafından çiziliyor",
+        systemBattery: "Pil", systemBluetooth: "Bluetooth", systemClock: "Saat", systemDisplays: "Ekranlar", systemKeyboard: "Giriş menüsü", systemSound: "Ses", systemWiFi: "Wi-Fi", systemScreenMirroring: "Ekran Yansıtma", systemControlCenter: "Denetim Merkezi",
         apply: "Uygula", applyPendingFormat: "%d değişikliği uygula", discard: "Vazgeç", applying: "Simgeler taşınıyor…", applyReportFormat: "%1$d taşındı, %2$d başarısız",
         applyHint: "Vorssaint simgeleri ⌘ ile sürükleyerek taşır. Bir süre fareye dokunmayın.", dragHint: "Menü çubuğunda ⌘ tuşunu basılı tutup simgeleri daraltma simgesinin öbür tarafına da sürükleyebilirsiniz.",
         perAppNote: "macOS simgeleri uygulama bazında gizler: aynı uygulamanın birden fazla simgesi birlikte gizlenir.", systemExtrasNote: "Simgeler gizliyken macOS, Odak gibi kendi öğelerinden bazılarını da kaldırır. Simgeler gösterildiğinde geri gelirler.",
@@ -148,7 +163,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Скрывать", hideCaption: "Слева от значка сворачивания. Скрыты, пока вы не нажмёте его, и снова скрываются при повторном нажатии.", hideEmpty: "Перетащите значки сюда или, удерживая ⌘, перетащите их в строке меню левее значка сворачивания.",
         neverSection: "Никогда не показывать", neverCaption: "Их нет в строке меню совсем, даже когда показаны скрытые значки. Действует на все значки приложения.", neverEmpty: "Нет значков, скрытых насовсем.",
         tierShow: "Показывать всегда", tierHide: "Скрывать", tierNever: "Никогда не показывать",
-        lockedSystem: "Управляется macOS", lockedOwn: "Значок Vorssaint всегда остаётся на виду", lockedHelper: "Рисуется вспомогательным процессом, который macOS не может скрыть",
+        lockedSystem: "Управляется macOS", lockedPinned: "macOS держит этот элемент в конце строки меню.", lockedOwn: "Значок Vorssaint всегда остаётся на виду", lockedHelper: "Рисуется вспомогательным процессом, который macOS не может скрыть",
+        systemBattery: "Аккумулятор", systemBluetooth: "Bluetooth", systemClock: "Часы", systemDisplays: "Дисплеи", systemKeyboard: "Меню ввода", systemSound: "Звук", systemWiFi: "Wi-Fi", systemScreenMirroring: "Повтор экрана", systemControlCenter: "Пункт управления",
         apply: "Применить", applyPendingFormat: "Применить изменения: %d", discard: "Отменить", applying: "Перемещение значков…", applyReportFormat: "Перемещено: %1$d, не удалось: %2$d",
         applyHint: "Vorssaint перемещает значки перетаскиванием с ⌘. Не трогайте мышь несколько секунд.", dragHint: "Значки можно также перетаскивать через значок сворачивания прямо в строке меню, удерживая ⌘.",
         perAppNote: "macOS скрывает значки по приложениям: несколько значков одного приложения скрываются вместе.", systemExtrasNote: "Пока значки скрыты, macOS убирает и некоторые собственные элементы, например Фокусирование. Они вернутся, когда значки будут показаны.",
@@ -166,7 +182,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Ocultar", hideCaption: "A la izquierda del icono de contraer. Ocultos hasta que haces clic en él, y ocultos de nuevo cuando vuelves a hacer clic.", hideEmpty: "Suelta iconos aquí o arrástralos con ⌘ a la izquierda del icono de contraer en la barra.",
         neverSection: "No mostrar nunca", neverCaption: "Fuera de la barra por completo, incluso mientras se muestran los iconos ocultos. Se aplica a todos los iconos de la app.", neverEmpty: "No hay nada oculto para siempre.",
         tierShow: "Mostrar siempre", tierHide: "Ocultar", tierNever: "No mostrar nunca",
-        lockedSystem: "Gestionado por macOS", lockedOwn: "El icono de Vorssaint siempre queda visible", lockedHelper: "Lo dibuja un proceso auxiliar que macOS no puede ocultar",
+        lockedSystem: "Gestionado por macOS", lockedPinned: "macOS lo mantiene al final de la barra.", lockedOwn: "El icono de Vorssaint siempre queda visible", lockedHelper: "Lo dibuja un proceso auxiliar que macOS no puede ocultar",
+        systemBattery: "Batería", systemBluetooth: "Bluetooth", systemClock: "Reloj", systemDisplays: "Pantallas", systemKeyboard: "Menú de teclado", systemSound: "Sonido", systemWiFi: "Wi-Fi", systemScreenMirroring: "Duplicar pantalla", systemControlCenter: "Centro de control",
         apply: "Aplicar", applyPendingFormat: "Aplicar cambios (%d)", discard: "Descartar", applying: "Moviendo iconos…", applyReportFormat: "Movidos: %1$d, fallidos: %2$d",
         applyHint: "Vorssaint mueve los iconos arrastrándolos con ⌘. No toques el ratón durante un momento.", dragHint: "También puedes mantener pulsada ⌘ y arrastrar los iconos al otro lado del icono de contraer en la barra de menús.",
         perAppNote: "macOS oculta los iconos por app: varios iconos de una misma app se ocultan juntos.", systemExtrasNote: "Mientras los iconos están ocultos, macOS también quita algunos de sus propios elementos, como Concentración. Vuelven cuando se muestran los iconos.",
@@ -184,7 +201,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Skryť", hideCaption: "Naľavo od ikony zbalenia. Skryté, kým na ňu nekliknete, a po ďalšom kliknutí znova skryté.", hideEmpty: "Pustite ikony sem alebo ich v lište s podržaným ⌘ potiahnite naľavo od ikony zbalenia.",
         neverSection: "Nikdy nezobraziť", neverCaption: "V lište vôbec nie sú, ani keď sú skryté ikony zobrazené. Platí pre všetky ikony danej aplikácie.", neverEmpty: "Nič nie je skryté natrvalo.",
         tierShow: "Vždy zobraziť", tierHide: "Skryť", tierNever: "Nikdy nezobraziť",
-        lockedSystem: "Spravuje macOS", lockedOwn: "Vlastná ikona Vorssaintu zostáva viditeľná", lockedHelper: "Kreslí ju pomocný proces, ktorý macOS nedokáže skryť",
+        lockedSystem: "Spravuje macOS", lockedPinned: "macOS ju drží na konci lišty.", lockedOwn: "Vlastná ikona Vorssaintu zostáva viditeľná", lockedHelper: "Kreslí ju pomocný proces, ktorý macOS nedokáže skryť",
+        systemBattery: "Batéria", systemBluetooth: "Bluetooth", systemClock: "Hodiny", systemDisplays: "Displeje", systemKeyboard: "Menu vstupu", systemSound: "Zvuk", systemWiFi: "Wi-Fi", systemScreenMirroring: "Zrkadlenie obrazovky", systemControlCenter: "Ovládacie centrum",
         apply: "Použiť", applyPendingFormat: "Použiť zmeny: %d", discard: "Zahodiť", applying: "Presúvajú sa ikony…", applyReportFormat: "Presunuté: %1$d, zlyhalo: %2$d",
         applyHint: "Vorssaint presúva ikony ťahaním s ⌘. Chvíľu sa nedotýkajte myši.", dragHint: "Ikony môžete aj priamo v lište potiahnuť cez ikonu zbalenia s podržaným ⌘.",
         perAppNote: "macOS skrýva ikony po aplikáciách: viaceré ikony jednej aplikácie sa skryjú spolu.", systemExtrasNote: "Kým sú ikony skryté, macOS odstráni aj niektoré vlastné položky, napríklad Môj čas. Vrátia sa, keď sa ikony zobrazia.",
@@ -202,7 +220,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Ausblenden", hideCaption: "Links vom Einklappsymbol. Ausgeblendet, bis du darauf klickst, und beim nächsten Klick wieder ausgeblendet.", hideEmpty: "Lege Symbole hier ab oder ziehe sie in der Leiste mit ⌘ links neben das Einklappsymbol.",
         neverSection: "Nie anzeigen", neverCaption: "Gar nicht in der Leiste, auch nicht, während die ausgeblendeten Symbole eingeblendet sind. Gilt für alle Symbole der App.", neverEmpty: "Nichts ist dauerhaft ausgeblendet.",
         tierShow: "Immer anzeigen", tierHide: "Ausblenden", tierNever: "Nie anzeigen",
-        lockedSystem: "Von macOS verwaltet", lockedOwn: "Das eigene Symbol von Vorssaint bleibt sichtbar", lockedHelper: "Wird von einem Hilfsprozess gezeichnet, den macOS nicht ausblenden kann",
+        lockedSystem: "Von macOS verwaltet", lockedPinned: "macOS hält dieses Symbol am Ende der Leiste.", lockedOwn: "Das eigene Symbol von Vorssaint bleibt sichtbar", lockedHelper: "Wird von einem Hilfsprozess gezeichnet, den macOS nicht ausblenden kann",
+        systemBattery: "Batterie", systemBluetooth: "Bluetooth", systemClock: "Uhr", systemDisplays: "Displays", systemKeyboard: "Eingabemenü", systemSound: "Ton", systemWiFi: "WLAN", systemScreenMirroring: "Bildschirmsynchronisierung", systemControlCenter: "Kontrollzentrum",
         apply: "Anwenden", applyPendingFormat: "Änderungen anwenden (%d)", discard: "Verwerfen", applying: "Symbole werden verschoben…", applyReportFormat: "%1$d verschoben, %2$d fehlgeschlagen",
         applyHint: "Vorssaint verschiebt Symbole per ⌘-Ziehen. Lass die Maus einen Moment lang los.", dragHint: "Du kannst Symbole auch mit gedrückter ⌘-Taste in der Menüleiste über das Einklappsymbol ziehen.",
         perAppNote: "macOS blendet Symbole pro App aus: Mehrere Symbole einer App verschwinden gemeinsam.", systemExtrasNote: "Solange Symbole ausgeblendet sind, entfernt macOS auch einige eigene Einträge, etwa Fokus. Sie kehren zurück, sobald die Symbole eingeblendet werden.",
@@ -220,7 +239,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Masquer", hideCaption: "À gauche de l’icône de réduction. Masquées jusqu’à ce que vous cliquiez dessus, masquées à nouveau au clic suivant.", hideEmpty: "Déposez des icônes ici, ou faites-les glisser avec ⌘ à gauche de l’icône de réduction dans la barre.",
         neverSection: "Ne jamais afficher", neverCaption: "Absentes de la barre, même lorsque les icônes masquées sont affichées. S’applique à toutes les icônes de l’app.", neverEmpty: "Rien n’est masqué pour de bon.",
         tierShow: "Toujours afficher", tierHide: "Masquer", tierNever: "Ne jamais afficher",
-        lockedSystem: "Géré par macOS", lockedOwn: "L’icône de Vorssaint reste toujours visible", lockedHelper: "Dessinée par un processus auxiliaire que macOS ne peut pas masquer",
+        lockedSystem: "Géré par macOS", lockedPinned: "macOS garde cet élément au bout de la barre.", lockedOwn: "L’icône de Vorssaint reste toujours visible", lockedHelper: "Dessinée par un processus auxiliaire que macOS ne peut pas masquer",
+        systemBattery: "Batterie", systemBluetooth: "Bluetooth", systemClock: "Horloge", systemDisplays: "Moniteurs", systemKeyboard: "Menu de saisie", systemSound: "Son", systemWiFi: "Wi-Fi", systemScreenMirroring: "Recopie de l’écran", systemControlCenter: "Centre de contrôle",
         apply: "Appliquer", applyPendingFormat: "Appliquer les modifications (%d)", discard: "Annuler", applying: "Déplacement des icônes…", applyReportFormat: "Déplacées\u{00A0}: %1$d, échecs\u{00A0}: %2$d",
         applyHint: "Vorssaint déplace les icônes par glissement avec ⌘. Ne touchez pas à la souris pendant un instant.", dragHint: "Vous pouvez aussi maintenir ⌘ enfoncée et faire glisser les icônes de part et d’autre de l’icône de réduction dans la barre des menus.",
         perAppNote: "macOS masque les icônes par app\u{00A0}: plusieurs icônes d’une même app sont masquées ensemble.", systemExtrasNote: "Tant que des icônes sont masquées, macOS retire aussi certains de ses propres éléments, comme Concentration. Ils reviennent dès que les icônes sont affichées.",
@@ -238,7 +258,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Nascondi", hideCaption: "A sinistra dell’icona di compressione. Nascoste finché non ci fai clic, nascoste di nuovo al clic successivo.", hideEmpty: "Rilascia qui le icone, oppure trascinale con ⌘ a sinistra dell’icona di compressione nella barra.",
         neverSection: "Non mostrare mai", neverCaption: "Fuori dalla barra del tutto, anche mentre le icone nascoste sono mostrate. Vale per tutte le icone dell’app.", neverEmpty: "Niente è nascosto per sempre.",
         tierShow: "Mostra sempre", tierHide: "Nascondi", tierNever: "Non mostrare mai",
-        lockedSystem: "Gestita da macOS", lockedOwn: "L’icona di Vorssaint resta sempre visibile", lockedHelper: "Disegnata da un processo ausiliario che macOS non può nascondere",
+        lockedSystem: "Gestita da macOS", lockedPinned: "macOS la tiene alla fine della barra.", lockedOwn: "L’icona di Vorssaint resta sempre visibile", lockedHelper: "Disegnata da un processo ausiliario che macOS non può nascondere",
+        systemBattery: "Batteria", systemBluetooth: "Bluetooth", systemClock: "Orologio", systemDisplays: "Schermi", systemKeyboard: "Menu Tastiera", systemSound: "Suono", systemWiFi: "Wi-Fi", systemScreenMirroring: "Duplicazione schermo", systemControlCenter: "Centro di Controllo",
         apply: "Applica", applyPendingFormat: "Applica modifiche (%d)", discard: "Annulla", applying: "Spostamento delle icone…", applyReportFormat: "Spostate: %1$d, non riuscite: %2$d",
         applyHint: "Vorssaint sposta le icone trascinandole con ⌘. Non toccare il mouse per un momento.", dragHint: "Puoi anche tenere premuto ⌘ e trascinare le icone oltre l’icona di compressione nella barra dei menu.",
         perAppNote: "macOS nasconde le icone per app: più icone della stessa app vengono nascoste insieme.", systemExtrasNote: "Mentre le icone sono nascoste, macOS rimuove anche alcuni dei propri elementi, come Full immersion. Tornano quando le icone vengono mostrate.",
@@ -256,7 +277,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "隠す", hideCaption: "折りたたみアイコンの左側。クリックするまで隠れ、もう一度クリックすると再び隠れます。", hideEmpty: "ここにアイコンをドロップするか、バーで⌘を押しながら折りたたみアイコンの左へドラッグしてください。",
         neverSection: "表示しない", neverCaption: "隠れたアイコンを表示している間も、バーには一切表示されません。そのアプリのすべてのアイコンに適用されます。", neverEmpty: "完全に非表示のアイコンはありません。",
         tierShow: "常に表示", tierHide: "隠す", tierNever: "表示しない",
-        lockedSystem: "macOSが管理", lockedOwn: "Vorssaint自身のアイコンは常に表示されます", lockedHelper: "macOSが隠せないヘルパープロセスが描画しています",
+        lockedSystem: "macOSが管理", lockedPinned: "macOSがバーの端に固定しています。", lockedOwn: "Vorssaint自身のアイコンは常に表示されます", lockedHelper: "macOSが隠せないヘルパープロセスが描画しています",
+        systemBattery: "バッテリー", systemBluetooth: "Bluetooth", systemClock: "時計", systemDisplays: "ディスプレイ", systemKeyboard: "入力メニュー", systemSound: "サウンド", systemWiFi: "Wi-Fi", systemScreenMirroring: "画面ミラーリング", systemControlCenter: "コントロールセンター",
         apply: "適用", applyPendingFormat: "%d 件の変更を適用", discard: "破棄", applying: "アイコンを移動中…", applyReportFormat: "%1$d 件を移動、%2$d 件が失敗",
         applyHint: "Vorssaintは⌘ドラッグでアイコンを移動します。しばらくマウスに触れないでください。", dragHint: "メニューバーで⌘を押しながら、アイコンを折りたたみアイコンの反対側へドラッグすることもできます。",
         perAppNote: "macOSはアプリ単位でアイコンを隠します。同じアプリの複数のアイコンはまとめて隠れます。", systemExtrasNote: "アイコンが隠れている間、macOSは集中モードなど自身の項目の一部も取り除きます。アイコンを表示すると元に戻ります。",
@@ -274,7 +296,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "숨기기", hideCaption: "접기 아이콘의 왼쪽. 클릭할 때까지 숨겨지고, 다시 클릭하면 또 숨겨집니다.", hideEmpty: "아이콘을 여기에 놓거나, 막대에서 ⌘을 누른 채 접기 아이콘 왼쪽으로 드래그하세요.",
         neverSection: "표시 안 함", neverCaption: "숨겨진 아이콘이 표시되는 동안에도 막대에 전혀 나타나지 않습니다. 해당 앱의 모든 아이콘에 적용됩니다.", neverEmpty: "완전히 숨긴 아이콘이 없습니다.",
         tierShow: "항상 표시", tierHide: "숨기기", tierNever: "표시 안 함",
-        lockedSystem: "macOS에서 관리", lockedOwn: "Vorssaint 자체 아이콘은 항상 표시됩니다", lockedHelper: "macOS가 숨길 수 없는 보조 프로세스가 그립니다",
+        lockedSystem: "macOS에서 관리", lockedPinned: "macOS가 막대 끝에 고정합니다.", lockedOwn: "Vorssaint 자체 아이콘은 항상 표시됩니다", lockedHelper: "macOS가 숨길 수 없는 보조 프로세스가 그립니다",
+        systemBattery: "배터리", systemBluetooth: "Bluetooth", systemClock: "시계", systemDisplays: "디스플레이", systemKeyboard: "입력 메뉴", systemSound: "사운드", systemWiFi: "Wi-Fi", systemScreenMirroring: "화면 미러링", systemControlCenter: "제어 센터",
         apply: "적용", applyPendingFormat: "변경 사항 %d개 적용", discard: "취소", applying: "아이콘 이동 중…", applyReportFormat: "%1$d개 이동, %2$d개 실패",
         applyHint: "Vorssaint는 ⌘ 드래그로 아이콘을 옮깁니다. 잠시 마우스에서 손을 떼 주세요.", dragHint: "메뉴 막대에서 ⌘을 누른 채 아이콘을 접기 아이콘 반대편으로 드래그할 수도 있습니다.",
         perAppNote: "macOS는 앱 단위로 아이콘을 숨깁니다. 한 앱의 여러 아이콘은 함께 숨겨집니다.", systemExtrasNote: "아이콘이 숨겨진 동안 macOS는 집중 모드 같은 자체 항목 일부도 함께 제거합니다. 아이콘을 표시하면 다시 나타납니다.",
@@ -292,7 +315,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "Приховувати", hideCaption: "Ліворуч від іконки згортання. Приховані, доки ви не клацнете її, і знову приховуються після наступного клацання.", hideEmpty: "Перетягніть іконки сюди або, утримуючи ⌘, перетягніть їх у смузі меню ліворуч від іконки згортання.",
         neverSection: "Ніколи не показувати", neverCaption: "Їх немає у смузі меню взагалі, навіть коли приховані іконки показано. Стосується всіх іконок програми.", neverEmpty: "Немає іконок, прихованих назовсім.",
         tierShow: "Показувати завжди", tierHide: "Приховувати", tierNever: "Ніколи не показувати",
-        lockedSystem: "Керується macOS", lockedOwn: "Іконка Vorssaint завжди лишається на видноті", lockedHelper: "Малюється допоміжним процесом, який macOS не може приховати",
+        lockedSystem: "Керується macOS", lockedPinned: "macOS тримає цей елемент у кінці смуги меню.", lockedOwn: "Іконка Vorssaint завжди лишається на видноті", lockedHelper: "Малюється допоміжним процесом, який macOS не може приховати",
+        systemBattery: "Акумулятор", systemBluetooth: "Bluetooth", systemClock: "Годинник", systemDisplays: "Дисплеї", systemKeyboard: "Меню вводу", systemSound: "Звук", systemWiFi: "Wi-Fi", systemScreenMirroring: "Дублювання екрана", systemControlCenter: "Центр керування",
         apply: "Застосувати", applyPendingFormat: "Застосувати зміни: %d", discard: "Відхилити", applying: "Переміщення іконок…", applyReportFormat: "Переміщено: %1$d, не вдалося: %2$d",
         applyHint: "Vorssaint переміщує іконки перетягуванням із ⌘. Не торкайтеся миші кілька секунд.", dragHint: "Іконки можна також перетягувати через іконку згортання просто у смузі меню, утримуючи ⌘.",
         perAppNote: "macOS приховує іконки за програмами: кілька іконок однієї програми приховуються разом.", systemExtrasNote: "Поки іконки приховано, macOS прибирає й деякі власні елементи, як-от Зосередження. Вони повернуться, щойно іконки буде показано.",
@@ -310,7 +334,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "隐藏", hideCaption: "位于折叠图标左侧。点按它之前保持隐藏，再次点按后重新隐藏。", hideEmpty: "将图标拖放到此处，或在菜单栏中按住 ⌘ 将图标拖到折叠图标左侧。",
         neverSection: "永不显示", neverCaption: "完全不出现在菜单栏中，显示隐藏的图标时也不例外。对该 App 的所有图标生效。", neverEmpty: "没有永久隐藏的图标。",
         tierShow: "始终显示", tierHide: "隐藏", tierNever: "永不显示",
-        lockedSystem: "由 macOS 管理", lockedOwn: "Vorssaint 自己的图标始终显示", lockedHelper: "由 macOS 无法隐藏的辅助进程绘制",
+        lockedSystem: "由 macOS 管理", lockedPinned: "macOS 将其固定在菜单栏末端。", lockedOwn: "Vorssaint 自己的图标始终显示", lockedHelper: "由 macOS 无法隐藏的辅助进程绘制",
+        systemBattery: "电池", systemBluetooth: "蓝牙", systemClock: "时钟", systemDisplays: "显示器", systemKeyboard: "输入法菜单", systemSound: "声音", systemWiFi: "Wi-Fi", systemScreenMirroring: "屏幕镜像", systemControlCenter: "控制中心",
         apply: "应用", applyPendingFormat: "应用 %d 项更改", discard: "放弃", applying: "正在移动图标…", applyReportFormat: "已移动 %1$d 个，失败 %2$d 个",
         applyHint: "Vorssaint 通过按住 ⌘ 拖移来移动图标。请暂时不要碰鼠标。", dragHint: "你也可以在菜单栏中按住 ⌘，将图标拖到折叠图标的另一侧。",
         perAppNote: "macOS 按 App 隐藏图标：同一个 App 的多个图标会一起隐藏。", systemExtrasNote: "图标隐藏期间，macOS 也会移除自身的部分项目，例如专注模式。图标显示后它们会恢复。",
@@ -328,7 +353,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "隱藏", hideCaption: "位於收合圖像左側。按一下它之前保持隱藏，再按一下後重新隱藏。", hideEmpty: "將圖像拖放到此處，或在選單列中按住 ⌘ 將圖像拖到收合圖像左側。",
         neverSection: "永不顯示", neverCaption: "完全不出現在選單列中，顯示隱藏的圖像時也不例外。適用於該 App 的所有圖像。", neverEmpty: "沒有永久隱藏的圖像。",
         tierShow: "一律顯示", tierHide: "隱藏", tierNever: "永不顯示",
-        lockedSystem: "由 macOS 管理", lockedOwn: "Vorssaint 自己的圖像一律顯示", lockedHelper: "由 macOS 無法隱藏的輔助程序繪製",
+        lockedSystem: "由 macOS 管理", lockedPinned: "macOS 將其固定在選單列末端。", lockedOwn: "Vorssaint 自己的圖像一律顯示", lockedHelper: "由 macOS 無法隱藏的輔助程序繪製",
+        systemBattery: "電池", systemBluetooth: "藍牙", systemClock: "時鐘", systemDisplays: "顯示器", systemKeyboard: "輸入法選單", systemSound: "聲音", systemWiFi: "Wi-Fi", systemScreenMirroring: "螢幕鏡像輸出", systemControlCenter: "控制中心",
         apply: "套用", applyPendingFormat: "套用 %d 項變更", discard: "捨棄", applying: "正在搬移圖像…", applyReportFormat: "已搬移 %1$d 個，失敗 %2$d 個",
         applyHint: "Vorssaint 會按住 ⌘ 拖移來搬移圖像。請暫時不要碰滑鼠。", dragHint: "您也可以在選單列中按住 ⌘，將圖像拖到收合圖像的另一側。",
         perAppNote: "macOS 以 App 為單位隱藏圖像：同一個 App 的多個圖像會一起隱藏。", systemExtrasNote: "圖像隱藏期間，macOS 也會移除自身的部分項目，例如專注模式。圖像顯示後它們會恢復。",
@@ -346,7 +372,8 @@ extension MenuBarOrganizerFeatureStrings {
         hideSection: "隱藏", hideCaption: "位於收合圖像左邊。按一下它之前保持隱藏，再按一下後重新隱藏。", hideEmpty: "將圖像拖放到此處，或在選單列中按住 ⌘ 將圖像拖到收合圖像左邊。",
         neverSection: "永不顯示", neverCaption: "完全不出現在選單列中，顯示隱藏的圖像時亦不例外。適用於該 App 的所有圖像。", neverEmpty: "沒有永久隱藏的圖像。",
         tierShow: "一律顯示", tierHide: "隱藏", tierNever: "永不顯示",
-        lockedSystem: "由 macOS 管理", lockedOwn: "Vorssaint 自己的圖像一律顯示", lockedHelper: "由 macOS 無法隱藏的輔助程序繪製",
+        lockedSystem: "由 macOS 管理", lockedPinned: "macOS 將其固定在選單列末端。", lockedOwn: "Vorssaint 自己的圖像一律顯示", lockedHelper: "由 macOS 無法隱藏的輔助程序繪製",
+        systemBattery: "電池", systemBluetooth: "藍牙", systemClock: "時鐘", systemDisplays: "顯示器", systemKeyboard: "輸入法選單", systemSound: "聲音", systemWiFi: "Wi-Fi", systemScreenMirroring: "螢幕鏡像", systemControlCenter: "控制中心",
         apply: "套用", applyPendingFormat: "套用 %d 項變更", discard: "捨棄", applying: "正在移動圖像…", applyReportFormat: "已移動 %1$d 個，失敗 %2$d 個",
         applyHint: "Vorssaint 會按住 ⌘ 拖移來移動圖像。請暫時不要觸碰滑鼠。", dragHint: "您也可以在選單列中按住 ⌘，將圖像拖到收合圖像的另一邊。",
         perAppNote: "macOS 以 App 為單位隱藏圖像：同一個 App 的多個圖像會一併隱藏。", systemExtrasNote: "圖像隱藏期間，macOS 亦會移除自身的部分項目，例如專注模式。圖像顯示後它們會恢復。",

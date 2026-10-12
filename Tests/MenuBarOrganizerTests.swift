@@ -19,6 +19,10 @@ enum MenuBarOrganizerTests {
                             pid: 100, appName: bundle, hostIsBundleless: bundleless)
     }
 
+    private static func system(_ suffix: String) -> MenuBarItemIdentity {
+        identity(MenuBarOrganizerPolicy.agentBundleID, "com.apple.menuextra." + suffix)
+    }
+
     /// A bar with two hideable apps and a helper left of the collapser, one app,
     /// Vorssaint's main icon and the battery right of it.
     private static let bar: [MenuBarItemSnapshot] = [
@@ -34,6 +38,7 @@ enum MenuBarOrganizerTests {
     static func run(_ suite: TestSuite) {
         icons(suite)
         identities(suite)
+        systemItems(suite)
         availability(suite)
         partition(suite)
         allowlist(suite)
@@ -60,16 +65,54 @@ enum MenuBarOrganizerTests {
     }
 
     private static func identities(_ suite: TestSuite) {
-        let first = MenuBarItemIdentity.make(bundleID: "a", candidates: [nil, "", "  ", "ident", "desc"], taken: [])
-        suite.expect(first.title == "ident", "the first non-empty Accessibility string names the item")
-        let unnamed = MenuBarItemIdentity.make(bundleID: "a", candidates: [nil, ""], taken: [])
-        suite.expect(unnamed.title == "Item-0", "an item without any string is Item-0")
-        let second = MenuBarItemIdentity.make(bundleID: "a", candidates: [], taken: [unnamed])
+        let first = MenuBarItemIdentity.make(bundleID: "a", identifier: "ident", description: "desc", taken: [])
+        suite.expect(first.title == "ident", "the identifier names the item")
+        let described = MenuBarItemIdentity.make(bundleID: "a", identifier: "  ", description: "desc", taken: [])
+        suite.expect(described.title == "desc", "the description names an item without an identifier")
+        // What an app that only sets a title looks like: the title, which it
+        // rewrites at will, is not among the strings an identity is made of.
+        let unnamed = MenuBarItemIdentity.make(bundleID: "a", identifier: nil, description: "", taken: [])
+        suite.expect(unnamed.title == "Item-0", "an item with neither is Item-0, whatever its title says")
+        let second = MenuBarItemIdentity.make(bundleID: "a", identifier: nil, description: nil, taken: [unnamed])
         suite.expect(second.title == "Item-1", "a second unnamed item of one app stays distinct")
-        let repeated = MenuBarItemIdentity.make(bundleID: "a", candidates: ["ident"], taken: [first])
-        suite.expect(repeated != first && repeated.title == "ident-1", "a repeated title stays distinct")
-        let other = MenuBarItemIdentity.make(bundleID: "b", candidates: ["ident"], taken: [first])
-        suite.expect(other.title == "ident", "titles only collide within one bundle")
+        let repeated = MenuBarItemIdentity.make(bundleID: "a", identifier: "ident", description: nil, taken: [first])
+        suite.expect(repeated != first && repeated.title == "ident-1", "a repeated name stays distinct")
+        let other = MenuBarItemIdentity.make(bundleID: "b", identifier: "ident", description: nil, taken: [first])
+        suite.expect(other.title == "ident", "names only collide within one bundle")
+    }
+
+    private static func systemItems(_ suite: TestSuite) {
+        let rows: [(String, MenuBarSystemItem)] = [
+            ("battery", .battery), ("bluetooth", .bluetooth), ("clock", .clock), ("display", .displays),
+            ("displays", .displays), ("textinput", .keyboard), ("keyboard", .keyboard), ("sound", .sound),
+            ("wifi", .wifi), ("screen-mirroring", .screenMirroring), ("controlcenter", .controlCenter)
+        ]
+        for (suffix, expected) in rows {
+            suite.expect(MenuBarSystemItem.item(for: system(suffix)) == expected, "\(suffix) is system item \(expected.rawValue)")
+        }
+        suite.expect(MenuBarSystemItem.allCases.map(\.rawValue) == Array(0...8)
+                        && MenuBarSystemItem.wifi.rawValue == 6 && MenuBarSystemItem.controlCenter.rawValue == 8,
+                     "the raw values are the indices the allowlist takes")
+        suite.expect(MenuBarSystemItem.item(for: identity("com.apple.TextInputMenuAgent", "Item-0")) == .keyboard,
+                     "the input menu's own process is the keyboard item whatever it is called")
+        suite.expect(MenuBarSystemItem.item(for: system("focus")) == nil
+                        && MenuBarSystemItem.item(for: identity("com.example.alpha", "com.apple.menuextra.battery")) == nil,
+                     "an unknown extra and an app borrowing a system name are no system items")
+
+        func snapshot(_ identity: MenuBarItemIdentity) -> MenuBarItemSnapshot {
+            MenuBarItemSnapshot(identity: identity, frame: .zero, pid: 1, appName: nil, hostIsBundleless: false)
+        }
+        func verdict(_ identity: MenuBarItemIdentity) -> [Bool] {
+            [MenuBarOrganizerPolicy.canHide(snapshot(identity), ownBundleID: own), MenuBarOrganizerPolicy.isMovable(identity)]
+        }
+        suite.expect(verdict(system("wifi")) == [true, true]
+                        && verdict(identity("com.apple.TextInputMenuAgent")) == [true, true],
+                     "a system item with an index hides and moves")
+        suite.expect(verdict(system("clock")) == [false, false] && verdict(system("controlcenter")) == [false, false],
+                     "the items macOS pins neither hide nor move")
+        suite.expect(verdict(system("focus")) == [false, false], "a system item without an index neither hides nor moves")
+        suite.expect(verdict(identity("com.example.alpha")) == [true, true] && verdict(collapser) == [false, true],
+                     "apps are judged as before")
     }
 
     private static func availability(_ suite: TestSuite) {
@@ -105,39 +148,56 @@ enum MenuBarOrganizerTests {
             suite.expect(false, "the reference bar partitions")
             return
         }
-        let hidden = MenuBarOrganizerLayout.hiddenBundles(in: layout, items: bar, ownBundleID: own)
-        suite.expect(hidden == ["com.example.alpha", "com.example.beta"],
+        typealias Hidden = MenuBarHiddenSet
+        func bundles(_ ids: String...) -> Hidden { Hidden(ids.map { identity($0) }) }
+        let hidden = MenuBarOrganizerLayout.hidden(in: layout, items: bar, ownBundleID: own)
+        suite.expect(hidden == bundles("com.example.alpha", "com.example.beta"),
                      "only addressable hosts left of the collapser are hidden")
 
         let running: Set<String> = ["com.example.alpha", "com.example.gamma", "com.example.windowed"]
-        let list = MenuBarOrganizerLayout.allowlist(hiddenBundles: hidden, neverShownBundles: [], observed: bar,
+        let list = MenuBarOrganizerLayout.allowlist(hidden: hidden, neverShown: Hidden(), observed: bar,
                                                     running: running, ownBundleID: own)
         suite.expect(list?.bundles == ["com.example.gamma", "com.example.helper", "com.example.windowed", own].sorted(),
                      "everything running or observed stays allowed except the hidden bundles")
-        suite.expect(list?.systemItems == Array(0...8), "all nine system items stay allowed")
+        suite.expect(list?.systemItems == Array(0...8), "with no system item hidden all nine stay allowed")
 
-        // Vorssaint's own icon, a system item and a helper dragged left of the
-        // collapser must not turn into hide requests.
-        let unhideable = MenuBarLayout(hidden: [identity(own, "Vorssaint"), identity("com.example.helper"),
-                                                identity(MenuBarOrganizerPolicy.agentBundleID, "com.apple.menuextra.battery")],
-                                       visible: [])
-        suite.expect(MenuBarOrganizerLayout.hiddenBundles(in: unhideable, items: bar, ownBundleID: own).isEmpty,
-                     "own, system and bundleless items are never hidden")
-        suite.expect(MenuBarOrganizerLayout.allowlist(hiddenBundles: [], neverShownBundles: [], observed: bar,
+        // Vorssaint's own icon, a helper and the pinned clock dragged left of
+        // the collapser must not turn into hide requests; the battery does.
+        let clock = item(MenuBarOrganizerPolicy.agentBundleID, "com.apple.menuextra.clock", x: 1210)
+        let dragged = MenuBarLayout(hidden: [identity(own, "Vorssaint"), identity("com.example.helper"),
+                                             clock.identity, system("battery")],
+                                    visible: [])
+        let onlyBattery = MenuBarOrganizerLayout.hidden(in: dragged, items: bar + [clock], ownBundleID: own)
+        suite.expect(onlyBattery == Hidden([system("battery")]) && onlyBattery.bundles.isEmpty,
+                     "own, pinned and bundleless items are never hidden, a system item is hidden by index")
+        let withoutBattery = MenuBarOrganizerLayout.allowlist(hidden: onlyBattery, neverShown: Hidden([system("wifi")]),
+                                                              observed: bar, running: running, ownBundleID: own)
+        suite.expect(withoutBattery?.systemItems == [1, 2, 3, 4, 5, 7, 8],
+                     "a hidden and a never-shown system item are left out of the allowed indices")
+        suite.expect(withoutBattery?.bundles == (running.union(bar.map(\.identity.bundleID))
+                                                    .subtracting([MenuBarOrganizerPolicy.agentBundleID])).sorted(),
+                     "hiding only system items still restricts the bar, with every app allowed")
+        let withoutKeyboard = MenuBarOrganizerLayout.allowlist(
+            hidden: Hidden([identity("com.apple.TextInputMenuAgent")]), neverShown: Hidden(), observed: bar,
+            running: running.union(["com.apple.TextInputMenuAgent"]), ownBundleID: own)
+        suite.expect(withoutKeyboard?.systemItems == [0, 1, 2, 3, 5, 6, 7, 8]
+                        && withoutKeyboard?.bundles.contains("com.apple.TextInputMenuAgent") == false,
+                     "a hidden input menu loses its index and its process is not allowed either")
+        suite.expect(MenuBarOrganizerLayout.allowlist(hidden: Hidden(), neverShown: Hidden(), observed: bar,
                                                       running: running, ownBundleID: own) == nil,
                      "nothing to hide means no assertion")
         suite.expect(MenuBarOrganizerLayout.allowlist(
-                         hiddenBundles: [own, "com.example.helper"],
-                         neverShownBundles: [MenuBarOrganizerPolicy.agentBundleID, own],
+                         hidden: Hidden([identity(own), identity("com.example.helper"), system("clock")]),
+                         neverShown: Hidden([system("focus"), identity(own), system("controlcenter")]),
                          observed: bar, running: running, ownBundleID: own) == nil,
-                     "a request naming only protected bundles hides nothing")
+                     "a request naming only protected bundles and pinned items hides nothing")
 
-        let expanded = MenuBarOrganizerLayout.allowlist(hiddenBundles: [], neverShownBundles: ["com.example.gamma"],
+        let expanded = MenuBarOrganizerLayout.allowlist(hidden: Hidden(), neverShown: bundles("com.example.gamma"),
                                                         observed: bar, running: running, ownBundleID: own)
         suite.expect(expanded?.bundles == ["com.example.alpha", "com.example.beta", "com.example.helper",
                                            "com.example.windowed", own].sorted(),
                      "an expanded bar keeps only the never-shown bundles out")
-        let both = MenuBarOrganizerLayout.allowlist(hiddenBundles: hidden, neverShownBundles: ["com.example.gamma"],
+        let both = MenuBarOrganizerLayout.allowlist(hidden: hidden, neverShown: bundles("com.example.gamma"),
                                                     observed: bar, running: running, ownBundleID: own)
         suite.expect(both?.bundles == ["com.example.helper", "com.example.windowed", own].sorted(),
                      "a collapsed bar keeps the hidden and the never-shown bundles out")
@@ -145,18 +205,20 @@ enum MenuBarOrganizerTests {
         let delta = identity("com.example.delta")
         let never = MenuBarLayout(hidden: [], visible: [],
                                   neverShown: [delta, identity("com.example.gamma"), identity("com.example.helper"),
-                                               identity("com.example.unknown")])
-        suite.expect(MenuBarOrganizerLayout.neverShownBundles(
+                                               identity("com.example.unknown"), system("battery")])
+        var keptOut = bundles("com.example.delta", "com.example.gamma")
+        keptOut.systemItems = [.battery]
+        suite.expect(MenuBarOrganizerLayout.neverShown(
                          in: never, items: bar, known: [MenuBarHiddenRecord(identity: delta, appName: "Delta")],
-                         ownBundleID: own) == ["com.example.delta", "com.example.gamma"],
+                         ownBundleID: own) == keptOut,
                      "a never-shown item gone from the bar is taken from its record, one in the bar must be hideable")
 
-        let everything = MenuBarOrganizerLayout.allowlist(hiddenBundles: ["com.example.alpha", own],
-                                                          neverShownBundles: [], observed: [item("com.example.alpha", x: 0)],
+        let everything = MenuBarOrganizerLayout.allowlist(hidden: bundles("com.example.alpha", own),
+                                                          neverShown: Hidden(), observed: [item("com.example.alpha", x: 0)],
                                                           running: [], ownBundleID: own)
         suite.expect(everything?.bundles == [own],
                      "the allowlist is never empty: the own bundle is always on it")
-        suite.expect(MenuBarOrganizerLayout.allowlist(hiddenBundles: ["com.example.alpha"], neverShownBundles: [], observed: [],
+        suite.expect(MenuBarOrganizerLayout.allowlist(hidden: bundles("com.example.alpha"), neverShown: Hidden(), observed: [],
                                                       running: [], ownBundleID: "") == nil,
                      "without an own bundle id there is nothing safe to allow")
     }
@@ -294,13 +356,30 @@ enum MenuBarOrganizerTests {
         suite.expect(Editor.pendingMoves(from: drawn, to: Editor.moving(delta, to: .show, before: nil, in: drawn) { _ in false },
                                          collapser: collapser) == 1,
                      "a changed never-shown set needs an apply although nothing in the bar can be dragged yet")
-        var systemShuffled = layout
-        systemShuffled.visible.reverse()
-        let withoutSystem = MenuBarLayout(hidden: layout.hidden,
-                                          visible: systemShuffled.visible.filter { $0.bundleID != MenuBarOrganizerPolicy.agentBundleID })
-        suite.expect(Editor.pendingMoves(from: layout, to: systemShuffled, collapser: collapser)
-                        == Editor.pendingMoves(from: layout, to: withoutSystem, collapser: collapser),
-                     "system items never count as a pending drag")
+        let battery = system("battery"), clock = system("clock")
+        suite.expect(Editor.pendingMoves(from: layout, to: Editor.moving(battery, to: .hide, before: nil, in: layout) { _ in false },
+                                         collapser: collapser) == 1,
+                     "moving a system item is a pending drag")
+        var pinned = layout
+        pinned.visible.append(clock)
+        var pinnedMoved = pinned
+        pinnedMoved.visible.swapAt(0, pinnedMoved.visible.count - 1)
+        var withoutPinned = pinnedMoved
+        withoutPinned.visible.removeAll { $0 == clock }
+        suite.expect(Editor.pendingMoves(from: pinned, to: pinnedMoved, collapser: collapser)
+                        == Editor.pendingMoves(from: layout, to: withoutPinned, collapser: collapser),
+                     "an item macOS pins never counts as a pending drag")
+
+        // The agent draws every system item, yet each is kept out alone.
+        var systems = layout
+        systems.visible += [system("wifi"), clock]
+        let banished = Editor.moving(battery, to: .never, before: nil, in: systems) { $0 == clock }
+        suite.expect(banished.neverShown == [battery] && banished.visible == systems.visible.filter { $0 != battery },
+                     "never show takes a system item alone, not the agent's other items")
+        suite.expect(Editor.baseline(layout: systems, lastHidden: [],
+                                     neverShown: [MenuBarHiddenRecord(identity: battery, appName: nil)], collapsed: false)
+                        == banished,
+                     "a never-shown system item does not draw the other system items as never shown")
     }
 
     private static func tierMoves(_ suite: TestSuite) {

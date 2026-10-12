@@ -7,18 +7,23 @@ import Foundation
 // The pure half of the Menu Bar Organizer: everything that can be decided from
 // an inventory without touching Accessibility, AppKit or the private API.
 
-/// Stable identity of one menu bar item: owning bundle + a title picked from
-/// AX title / identifier / description, "Item-0" when all are empty.
+/// Stable identity of one menu bar item: owning bundle + a name picked from
+/// the AX identifier, then the AX description. Never the AX title: that is
+/// display text an app rewrites at will (a usage percentage, the input
+/// source), and an identity that changes between walks matches nothing that
+/// was remembered. An item with neither is "Item-N", N counting the unnamed
+/// items of its app from the left. `title` is the stored name of that field.
 struct MenuBarItemIdentity: Hashable, Codable {
     let bundleID: String
     let title: String
 
-    /// Identity for an item whose Accessibility strings are `candidates`, in
-    /// order of preference. Two items of one app that would share a title get
-    /// a numeric suffix, so an identity always names exactly one item of a walk.
-    static func make(bundleID: String, candidates: [String?],
+    /// Identity for an item with these Accessibility strings; there is no
+    /// parameter for the title on purpose. Two items of one app that would
+    /// share a name get a numeric suffix, so an identity always names exactly
+    /// one item of a walk.
+    static func make(bundleID: String, identifier: String?, description: String?,
                      taken: Set<MenuBarItemIdentity>) -> MenuBarItemIdentity {
-        let named = candidates.lazy
+        let named = [identifier, description].lazy
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
         if let named {
@@ -46,7 +51,79 @@ struct MenuBarItemSnapshot: Equatable {
     /// allowlist cannot address it and the item cannot be hidden.
     let hostIsBundleless: Bool
 
+    /// Drawn by the menu bar agent itself.
     var isSystem: Bool { identity.bundleID == MenuBarOrganizerPolicy.agentBundleID }
+}
+
+/// The system items the allowlist addresses one by one. The raw value is the
+/// index the private API takes: an index left out of the list hides the item.
+/// Other system items (Focus, Spotlight, Siri, Now Playing) have no index and
+/// vanish under any restriction.
+enum MenuBarSystemItem: Int, CaseIterable {
+    case battery = 0, bluetooth, clock, displays, keyboard, sound, wifi, screenMirroring, controlCenter
+
+    private static let identifierPrefix = "com.apple.menuextra."
+    /// The input menu is drawn by a process of its own, not by the agent.
+    static let textInputBundleID = "com.apple.TextInputMenuAgent"
+
+    /// The system item an identity names, nil for anything else.
+    static func item(for identity: MenuBarItemIdentity) -> MenuBarSystemItem? {
+        if identity.bundleID == textInputBundleID { return .keyboard }
+        guard identity.bundleID == MenuBarOrganizerPolicy.agentBundleID,
+              identity.title.hasPrefix(identifierPrefix) else { return nil }
+        switch identity.title.dropFirst(identifierPrefix.count) {
+        case "battery": return .battery
+        case "bluetooth": return .bluetooth
+        case "clock": return .clock
+        case "display", "displays": return .displays
+        case "textinput", "keyboard": return .keyboard
+        case "sound": return .sound
+        case "wifi": return .wifi
+        case "screen-mirroring": return .screenMirroring
+        case "controlcenter": return .controlCenter
+        default: return nil
+        }
+    }
+
+    /// macOS keeps the clock and Control Center at the end of the bar: no
+    /// drag moves them, so the organizer leaves them alone altogether.
+    var isPinned: Bool { self == .clock || self == .controlCenter }
+
+    /// SF Symbol for the editor row. Bluetooth has no symbol of its own.
+    var symbol: String {
+        switch self {
+        case .battery: return "battery.100"
+        case .bluetooth: return "wave.3.right"
+        case .clock: return "clock"
+        case .displays: return "display"
+        case .keyboard: return "keyboard"
+        case .sound: return "speaker.wave.2"
+        case .wifi: return "wifi"
+        case .screenMirroring: return "airplayvideo"
+        case .controlCenter: return "switch.2"
+        }
+    }
+}
+
+/// What a restriction keeps out of the bar: apps by bundle id, system items
+/// by index.
+struct MenuBarHiddenSet: Equatable {
+    var bundles = Set<String>()
+    var systemItems = Set<MenuBarSystemItem>()
+
+    init() {}
+
+    /// The set that hides `identities`. An item of the input menu's process
+    /// counts as the keyboard system item, not as a bundle.
+    init(_ identities: some Sequence<MenuBarItemIdentity>) {
+        for identity in identities {
+            if let system = MenuBarSystemItem.item(for: identity) {
+                systemItems.insert(system)
+            } else {
+                bundles.insert(identity.bundleID)
+            }
+        }
+    }
 }
 
 enum MenuBarOrganizerAvailability {
@@ -66,19 +143,31 @@ enum MenuBarOrganizerAvailability {
 
 enum MenuBarOrganizerPolicy {
     static let agentBundleID = "com.apple.MenuBarAgent"
-    /// Battery, Bluetooth, clock, displays, input, sound, Wi-Fi, screen
-    /// mirroring and Control Center. All of them stay allowed.
-    static let allSystemItems: [Int] = Array(0...8)
 
-    /// The allowlist works per bundle id, so an item can only be hidden when
-    /// its host has one, and Vorssaint's own bundle must stay because the
-    /// collapser lives in it.
+    /// A system item hides through its index unless macOS pins it; the
+    /// agent's other items have no index. For apps the allowlist works per
+    /// bundle id, so an item can only be hidden when its host has one, and
+    /// Vorssaint's own bundle must stay because the collapser lives in it.
     static func canHide(_ item: MenuBarItemSnapshot, ownBundleID: String) -> Bool {
-        !item.isSystem && !item.hostIsBundleless
+        if let system = MenuBarSystemItem.item(for: item.identity) { return !system.isPinned }
+        return !item.isSystem && !item.hostIsBundleless
             && !item.identity.bundleID.isEmpty && item.identity.bundleID != ownBundleID
     }
 
-    static func isMovable(_ item: MenuBarItemSnapshot) -> Bool { !item.isSystem }
+    /// Whether a ⌘-drag may move the item: not the pinned system items, and
+    /// not the agent's items the organizer does not know.
+    static func isMovable(_ identity: MenuBarItemIdentity) -> Bool {
+        if let system = MenuBarSystemItem.item(for: identity) { return !system.isPinned }
+        return identity.bundleID != agentBundleID
+    }
+
+    /// Whether hiding one hides the other: two icons of one app, or the same
+    /// system item. Each system item hides alone although the agent draws
+    /// them all.
+    static func hideTogether(_ first: MenuBarItemIdentity, _ second: MenuBarItemIdentity) -> Bool {
+        let systems = (MenuBarSystemItem.item(for: first), MenuBarSystemItem.item(for: second))
+        return systems == (nil, nil) ? first.bundleID == second.bundleID : systems.0 == systems.1
+    }
 }
 
 /// The icon of the collapser, the organizer's own status item.
@@ -122,44 +211,50 @@ enum MenuBarOrganizerLayout {
                              visible: Array(ordered[(boundary + 1)...]))
     }
 
-    /// Bundles the assertion should hide for a layout: the hosts of the hidden
-    /// items that can be hidden at all.
-    static func hiddenBundles(in layout: MenuBarLayout, items: [MenuBarItemSnapshot],
-                              ownBundleID: String) -> Set<String> {
+    /// What the assertion should hide for a layout: the hosts of the hidden
+    /// items that can be hidden at all, and the hidden system items.
+    static func hidden(in layout: MenuBarLayout, items: [MenuBarItemSnapshot],
+                       ownBundleID: String) -> MenuBarHiddenSet {
         let hidden = Set(layout.hidden)
-        return Set(items.lazy
+        return MenuBarHiddenSet(items.lazy
             .filter { hidden.contains($0.identity) && MenuBarOrganizerPolicy.canHide($0, ownBundleID: ownBundleID) }
-            .map(\.identity.bundleID))
+            .map(\.identity))
     }
 
-    /// Bundles the assertion keeps out of the bar even while it is expanded.
+    /// What the assertion keeps out of the bar even while it is expanded.
     /// A never-shown item is gone from Accessibility, so one the inventory
     /// lacks counts when it is among the `known` records, which only ever
     /// hold items that can be hidden.
-    static func neverShownBundles(in layout: MenuBarLayout, items: [MenuBarItemSnapshot],
-                                  known: [MenuBarHiddenRecord], ownBundleID: String) -> Set<String> {
-        Set(MenuBarHiddenRecord.records(for: layout.neverShown, items: items, known: known,
-                                        ownBundleID: ownBundleID).map(\.identity.bundleID))
+    static func neverShown(in layout: MenuBarLayout, items: [MenuBarItemSnapshot],
+                           known: [MenuBarHiddenRecord], ownBundleID: String) -> MenuBarHiddenSet {
+        MenuBarHiddenSet(MenuBarHiddenRecord.records(for: layout.neverShown, items: items, known: known,
+                                                     ownBundleID: ownBundleID).map(\.identity))
     }
 
     /// Allowlist for the assertion: everything but the hidden and the
-    /// never-shown bundles. `nil` when neither names anything that can be
-    /// hidden (drop the assertion instead). Every running app stays allowed,
-    /// not only the ones seen in the bar: an extra allowed bundle costs
-    /// nothing, and a missing one would swallow an icon nobody asked to hide.
-    static func allowlist(hiddenBundles: Set<String>, neverShownBundles: Set<String>,
+    /// never-shown bundles and system items. `nil` when neither names
+    /// anything that can be hidden (drop the assertion instead). Every running
+    /// app stays allowed, not only the ones seen in the bar: an extra allowed
+    /// bundle costs nothing, and a missing one would swallow an icon nobody
+    /// asked to hide. The pinned system items always stay allowed.
+    static func allowlist(hidden: MenuBarHiddenSet, neverShown: MenuBarHiddenSet,
                           observed: [MenuBarItemSnapshot], running: Set<String>,
                           ownBundleID: String) -> (bundles: [String], systemItems: [Int])? {
         let protected = Set(observed.lazy.filter(\.hostIsBundleless).map(\.identity.bundleID))
             .union([ownBundleID, MenuBarOrganizerPolicy.agentBundleID, ""])
-        let hidden = hiddenBundles.union(neverShownBundles).subtracting(protected)
-        guard !hidden.isEmpty, !ownBundleID.isEmpty else { return nil }
+        var hiddenBundles = hidden.bundles.union(neverShown.bundles).subtracting(protected)
+        let hiddenSystem = hidden.systemItems.union(neverShown.systemItems).filter { !$0.isPinned }
+        guard !(hiddenBundles.isEmpty && hiddenSystem.isEmpty), !ownBundleID.isEmpty else { return nil }
+        // The input menu's own process must not vouch for an icon whose
+        // index is being withheld.
+        if hiddenSystem.contains(.keyboard) { hiddenBundles.insert(MenuBarSystemItem.textInputBundleID) }
         let allowed = running
             .union(observed.lazy.filter { !$0.isSystem }.map(\.identity.bundleID))
             .union([ownBundleID])
-            .subtracting(hidden)
+            .subtracting(hiddenBundles)
             .subtracting([""])
-        return (allowed.sorted(), MenuBarOrganizerPolicy.allSystemItems)
+        let systemItems = MenuBarSystemItem.allCases.filter { !hiddenSystem.contains($0) }.map(\.rawValue)
+        return (allowed.sorted(), systemItems)
     }
 }
 
@@ -335,7 +430,8 @@ enum MenuBarOrganizerEditorSupport {
     /// know (a relaunch) join the hidden side. Never-shown items are always
     /// drawn from memory. A walk of a bar that was open for a moment may have
     /// seen their apps on either side; they are hidden all the same, so every
-    /// icon of such an app is drawn as never shown.
+    /// icon of such an app is drawn as never shown. A system item is kept out
+    /// alone, not with the agent's other items.
     static func baseline(layout: MenuBarLayout?, lastHidden: [MenuBarHiddenRecord],
                          neverShown: [MenuBarHiddenRecord], collapsed: Bool) -> MenuBarLayout {
         var baseline = layout ?? MenuBarLayout(hidden: [], visible: [])
@@ -344,10 +440,12 @@ enum MenuBarOrganizerEditorSupport {
             baseline.hidden += lastHidden.map(\.identity).filter { !known.contains($0) }
         }
         let remembered = neverShown.map(\.identity)
-        let bundles = Set(remembered.map(\.bundleID))
-        let seen = (baseline.hidden + baseline.visible).filter { bundles.contains($0.bundleID) }
-        baseline.hidden.removeAll { bundles.contains($0.bundleID) }
-        baseline.visible.removeAll { bundles.contains($0.bundleID) }
+        let isKeptOut = { (identity: MenuBarItemIdentity) in
+            remembered.contains { MenuBarOrganizerPolicy.hideTogether($0, identity) }
+        }
+        let seen = (baseline.hidden + baseline.visible).filter(isKeptOut)
+        baseline.hidden.removeAll(where: isKeptOut)
+        baseline.visible.removeAll(where: isKeptOut)
         baseline.neverShown = remembered + seen.filter { !remembered.contains($0) }
         return baseline
     }
@@ -355,8 +453,8 @@ enum MenuBarOrganizerEditorSupport {
     /// Moves an item into `tier`, in front of `target` or to the end of the
     /// tier without one. The one function behind drag and drop and the row
     /// menu. Never show works per app, so a move into or out of it takes
-    /// every icon of the app along, and an item that `isLocked` never goes
-    /// there. Within one list an item dragged down lands behind the row it
+    /// every icon of the app along (a system item goes alone), and an item
+    /// that `isLocked` never goes there. Within one list an item dragged down lands behind the row it
     /// reached, as it does when rows part under a drag.
     static func moving(_ identity: MenuBarItemIdentity, to tier: Tier, before target: MenuBarItemIdentity?,
                        in layout: MenuBarLayout, isLocked: (MenuBarItemIdentity) -> Bool) -> MenuBarLayout {
@@ -365,7 +463,7 @@ enum MenuBarOrganizerEditorSupport {
         var moved = [identity]
         if source != tier, source == .never || tier == .never {
             moved = (layout.hidden + layout.visible + layout.neverShown).filter {
-                $0.bundleID == identity.bundleID && !(tier == .never && isLocked($0))
+                MenuBarOrganizerPolicy.hideTogether($0, identity) && !(tier == .never && isLocked($0))
             }
         }
         let path: WritableKeyPath<MenuBarLayout, [MenuBarItemIdentity]>
@@ -390,12 +488,12 @@ enum MenuBarOrganizerEditorSupport {
 
     /// How many steps applying `draft` to a bar laid out as `baseline` takes:
     /// one per drag, and one for a changed set of never-shown items, which
-    /// needs an apply of its own. System items are left out, as they are when
-    /// the drags are planned.
+    /// needs an apply of its own. Items no drag moves are left out, as they
+    /// are when the drags are planned.
     static func pendingMoves(from baseline: MenuBarLayout, to draft: MenuBarLayout,
                              collapser: MenuBarItemIdentity) -> Int {
         let current = (baseline.hidden + [collapser] + baseline.visible)
-            .filter { $0.bundleID != MenuBarOrganizerPolicy.agentBundleID }
+            .filter(MenuBarOrganizerPolicy.isMovable)
         let drags = MenuBarMovePlanner.plan(current: current,
                                             target: draft.hidden + [collapser] + draft.visible).count
         return drags + (Set(baseline.neverShown) == Set(draft.neverShown) ? 0 : 1)

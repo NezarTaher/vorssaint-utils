@@ -51,6 +51,14 @@ enum MenuBarOrganizerStringsTests {
                          && Set([strings.iconChevron, strings.iconDots, strings.iconLines, strings.iconGrid]).count == 4,
                          "\(prefix): the tiers and the icons each have a name of their own")
 
+            let systemNames = [strings.systemBattery, strings.systemBluetooth, strings.systemClock,
+                               strings.systemDisplays, strings.systemKeyboard, strings.systemSound, strings.systemWiFi,
+                               strings.systemScreenMirroring, strings.systemControlCenter]
+            suite.expect(Set(systemNames).count == systemNames.count,
+                         "\(prefix): every system item has a name of its own")
+            suite.expect(Set([strings.lockedSystem, strings.lockedPinned, strings.lockedOwn, strings.lockedHelper]).count == 4,
+                         "\(prefix): every lock reason reads differently")
+
             if language != .enUS {
                 suite.expect(strings.title != english.title
                              && strings.enableCaption != english.enableCaption,
