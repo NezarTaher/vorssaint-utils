@@ -456,7 +456,10 @@ final class MenuBarOrganizerService: ObservableObject {
             pid \(app.processIdentifier, privacy: .public) policy \(app.activationPolicy.rawValue, privacy: .public)
             """)
         refreshManagers()
-        guard let bundleID = app.bundleIdentifier, bundleID != ownBundleID else { return }
+        // A background-only process cannot own a status item, so its launch
+        // is no reason to open the bar.
+        guard let bundleID = app.bundleIdentifier, bundleID != ownBundleID,
+              app.activationPolicy != .prohibited else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if !awaitedLaunches.isEmpty {
             // Already open for an earlier launch of the same burst.
