@@ -5,6 +5,15 @@ import Foundation
 
 enum MenuBarOrganizerTests {
     static func run(_ suite: TestSuite) {
+        MenuBarOrganizerLifecycleTests.run(suite)
+        let clockFrame = CGRect(x: 1300, y: 0, width: 170, height: 30)
+        suite.expect(MenuBarItemSupport.cocoaFrame(accessibilityFrame: clockFrame, primaryTop: 956)
+            == CGRect(x: 1300, y: 926, width: 170, height: 30),
+                     "clock monitoring converts the primary display's AX frame to pointer coordinates")
+        let upperDisplay = CGRect(x: -1200, y: -800, width: 150, height: 24)
+        suite.expect(MenuBarItemSupport.cocoaFrame(accessibilityFrame: upperDisplay, primaryTop: 956)
+            == CGRect(x: -1200, y: 1732, width: 150, height: 24),
+                     "clock monitoring preserves negative origins and displays above the primary screen")
         suite.expect(!AppFeature.menuBarOrganizer.installedByDefault
                      && AppFeature.menuBarOrganizer.isBeta,
                      "the experimental organizer waits for an explicit feature install")

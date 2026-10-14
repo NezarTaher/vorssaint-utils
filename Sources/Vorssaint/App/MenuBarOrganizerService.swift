@@ -27,6 +27,9 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
     private let nativeVisibility = MenuBarNativeVisibility()
     private let catalog = MenuBarItemCatalog()
     private let hiddenBar = MenuBarHiddenBarController()
+    private let clockMonitor = MenuBarClockMonitor()
+    private var clockInteractionActive = false
+    private var clockRestore: DispatchWorkItem?
     private var refreshTimer: Timer?
     private var isRefreshing = false
     private var refreshGeneration = 0
@@ -49,6 +52,9 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
 
     private override init() {
         super.init()
+        clockMonitor.onChange = { [weak self] overClock in
+            self?.clockHoverChanged(overClock)
+        }
         hiddenBar.onDismiss = { [weak self] in
             self?.presentedSection = nil
             self?.updateSections()
@@ -94,6 +100,10 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
         failure = nil
         isUpdating = false
         refreshGeneration += 1
+        clockRestore?.cancel()
+        clockRestore = nil
+        clockMonitor.stop()
+        clockInteractionActive = false
         refreshTimer?.invalidate()
         refreshTimer = nil
         refreshCompletions = []
@@ -108,11 +118,13 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
         if enabled && usesNativeVisibility { requestedVisibility.toggleHidden() }
         if enabled {
             installItems()
+            if usesNativeVisibility { clockMonitor.start() }
             // Discover real items while they are still visible,
             // before applying the saved hidden/always-hidden rules.
             refreshApplications { [weak self] in self?.synchronizeVisibility() }
             refreshTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
                 self?.refreshApplications()
+                if self?.usesNativeVisibility == true { self?.clockMonitor.refreshFrames() }
             }
         } else {
             applications = []
@@ -194,12 +206,20 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
             self.applications = self.items.filter { seen.insert($0.bundleID).inserted }.map(\.application)
                 .sorted { ($0.localizedName ?? "").localizedStandardCompare($1.localizedName ?? "") == .orderedAscending }
             self.isRefreshing = false
-            if permissionChanged { self.synchronizeVisibility() }
             if self.presentedSection != nil, previous.map(\.id) != self.items.map(\.id) { self.presentHiddenBar() }
-            let callbacks = self.refreshCompletions
-            self.refreshCompletions = []
-            callbacks.forEach { $0() }
+            self.completeRefresh(permissionChanged: permissionChanged)
         }
+    }
+
+    private func completeRefresh(permissionChanged: Bool) {
+        let callbacks = refreshCompletions
+        refreshCompletions = []
+        // Retry a failed launch and reconcile owners discovered after the
+        // initial scan. Native visibility skips an unchanged active plan.
+        if callbacks.isEmpty, permissionChanged || (usesNativeVisibility && !isUpdating) {
+            synchronizeVisibility()
+        }
+        callbacks.forEach { $0() }
     }
 
     private func synchronizeVisibility(completion: ((Bool) -> Void)? = nil) {
@@ -221,6 +241,16 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
             completion?(false)
             return
         }
+        // Assessment mode suppresses Notification Center. Release it before
+        // the user clicks the clock without changing their requested sections.
+        if clockInteractionActive {
+            nativeVisibility.release()
+            isUpdating = false
+            visibility = target
+            updateSections()
+            completion?(true)
+            return
+        }
         var hidden = rules.hiddenBundles(state: target,
             ownBundleID: Bundle.main.bundleIdentifier ?? "com.vorssaint.utils")
         if let temporaryBundle { hidden.remove(temporaryBundle) }
@@ -230,13 +260,35 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
             if let error {
                 self.failure = error as? MenuBarNativeVisibility.Failure ?? .activation
                 self.nativeVisibility.release()
-                self.requestedVisibility.revealAll()
-                self.visibility = self.requestedVisibility
+                // Keep the requested plan so a transient startup/XPC failure
+                // can recover on the next refresh without a system restart.
+                self.visibility.revealAll()
             } else {
                 self.visibility = target
             }
             self.updateSections()
             completion?(error == nil)
+        }
+    }
+
+    private func clockHoverChanged(_ overClock: Bool) {
+        guard isEnabled, usesNativeVisibility else { return }
+        clockRestore?.cancel()
+        clockRestore = nil
+        if overClock {
+            clockInteractionActive = true
+            nativeVisibility.release()
+            isUpdating = false
+        } else {
+            // Let the system finish opening the panel before restoring hiding.
+            let restore = DispatchWorkItem { [weak self] in
+                guard let self, self.isEnabled else { return }
+                self.clockInteractionActive = false
+                self.clockRestore = nil
+                self.synchronizeVisibility()
+            }
+            clockRestore = restore
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: restore)
         }
     }
 

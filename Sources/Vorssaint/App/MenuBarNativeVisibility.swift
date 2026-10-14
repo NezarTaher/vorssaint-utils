@@ -53,8 +53,12 @@ final class MenuBarNativeVisibility {
                   registeredURL: NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier))
         else { completion(Failure.applicationLocation); return }
         guard Self.runtime != nil else { completion(Failure.unavailable); return }
-        generation += 1
         self.hiddenBundles = hiddenBundles
+        if active != nil, pending == nil, currentAllowedBundles() == allowedBundles {
+            completion(nil)
+            return
+        }
+        generation += 1
         activate(completion)
     }
 

@@ -13,6 +13,11 @@ struct MenuBarItemDescriptor: Equatable {
 }
 
 enum MenuBarItemSupport {
+    static func cocoaFrame(accessibilityFrame: CGRect, primaryTop: CGFloat) -> CGRect {
+        CGRect(x: accessibilityFrame.minX, y: primaryTop - accessibilityFrame.maxY,
+               width: accessibilityFrame.width, height: accessibilityFrame.height)
+    }
+
     /// MenuBarAgent can recreate an item's AX identifier when it becomes
     /// visible. Resolve within the same process, and never guess among several
     /// equally named items belonging to that process.

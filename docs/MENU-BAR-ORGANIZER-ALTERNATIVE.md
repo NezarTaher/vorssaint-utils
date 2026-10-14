@@ -21,13 +21,15 @@ For custom controls that do not implement Accessibility press actions, the organ
 
 ## Platform limits
 
-macOS 27 visibility uses the private MenuBarClientCore assessment API, discovered at runtime. This can change between OS releases. Failures release the restriction and restore visible icons. Additional system indicators can disappear while an assessment is active. Run the registered installed copy; duplicate builds with the same bundle ID can otherwise lose their recovery arrow.
+macOS 27 visibility uses the private MenuBarClientCore assessment API, discovered at runtime. This can change between OS releases. Failures release the restriction and restore visible icons while preserving the requested hidden sections; periodic inventory refresh retries activation automatically, including after a transient relaunch failure. Additional system indicators can disappear while an assessment is active. Run the registered installed copy; duplicate builds with the same bundle ID can otherwise lose their recovery arrow.
+
+Assessment mode also blocks Notification Center. The organizer temporarily releases it while the pointer is over the system clock and restores the current section rules half a second after the pointer leaves. Hidden icons are briefly visible during that interaction. Clock frames are discovered through Accessibility on a background queue; disabling or uninstalling the organizer removes the pointer monitors and cancels pending restoration. Final installed-copy verification of clock clicks and repeated app relaunches remains outstanding.
 
 macOS 14–26 uses off-screen dividers. A crowded/notched bar may still leave a real target unreachable after revealing icons. Such targets are not guessed. No live QA on these versions is claimed by the model tests.
 
 ## Validation and remaining QA
 
-The tests cover section rules, omitted accessory owners, changed AX identities, cache replacement, process isolation, ambiguous matches, hit-test boundaries, shelf geometry, locale coverage, feature availability, permission demand, and portable preferences. They do not synthesize desktop input.
+The tests cover section rules, omitted accessory owners, changed AX identities, cache replacement, process isolation, ambiguous matches, hit-test boundaries, shelf geometry, locale coverage, feature availability, permission demand, portable preferences, failed-activation recovery, clock suspension/restoration, cancellation, and display-coordinate conversion. They do not synthesize desktop input.
 
 Earlier live testing of the combined development build on macOS 27.0.1 verified Tuxera and Amphetamine menus and the NeatDownloadManager window, with five hidden icons retained without duplicates. These checks preceded the final standalone feature-hub integration and upstream rebase.
 

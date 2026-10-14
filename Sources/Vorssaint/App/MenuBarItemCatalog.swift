@@ -26,6 +26,38 @@ final class MenuBarItemCatalog {
     private let queue = DispatchQueue(label: "com.vorssaint.menu-bar-catalog", qos: .utility)
     private let interactionQueue = DispatchQueue(label: "com.vorssaint.menu-bar-press", qos: .userInitiated)
 
+    func scanClockFrames(completion: @escaping ([CGRect]) -> Void) {
+        let agents = NSWorkspace.shared.runningApplications.filter {
+            $0.bundleIdentifier == "com.apple.MenuBarAgent" || $0.bundleIdentifier == "com.apple.controlcenter"
+        }
+        let top = NSScreen.screens.first?.frame.maxY ?? 0
+        queue.async {
+            var frames: [CGRect] = []
+            if AXIsProcessTrusted() {
+                for agent in agents {
+                    let root = AXUIElementCreateApplication(agent.processIdentifier)
+                    AXUIElementSetMessagingTimeout(root, 0.15)
+                    var remaining = 256
+                    func visit(_ element: AXUIElement, depth: Int) {
+                        guard depth < 6, remaining > 0 else { return }
+                        remaining -= 1
+                        if Self.string(kAXIdentifierAttribute, from: element) == "com.apple.menuextra.clock",
+                           let frame = Self.frame(of: element), frame.width > 0, frame.height > 0 {
+                            frames.append(MenuBarItemSupport.cocoaFrame(accessibilityFrame: frame, primaryTop: top))
+                            return
+                        }
+                        for child in Self.elements(kAXChildrenAttribute, from: element) {
+                            visit(child, depth: depth + 1)
+                        }
+                    }
+                    if let extras = Self.element(kAXExtrasMenuBarAttribute, from: root) { visit(extras, depth: 0) }
+                    for window in Self.elements(kAXWindowsAttribute, from: root) { visit(window, depth: 0) }
+                }
+            }
+            DispatchQueue.main.async { completion(frames) }
+        }
+    }
+
     func scan(application: NSRunningApplication? = nil,
               completion: @escaping ([OrganizerMenuBarItem], Bool) -> Void) {
         let running = NSWorkspace.shared.runningApplications
