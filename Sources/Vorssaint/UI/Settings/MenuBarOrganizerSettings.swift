@@ -7,8 +7,7 @@ import UniformTypeIdentifiers
 /// The Menu Bar Organizer page: the switch, the collapser's icon, where the
 /// hidden icons show (the bar or a shelf), a drawing of the bar in three tiers
 /// (always shown, hidden behind the collapser, never shown) and the auto
-/// re-hide delay. Rows are dragged within and across the
-/// tiers. The drawing is a local copy; the bar only changes when it is applied.
+/// re-hide delay. Row choices apply immediately; dragging commits on drop.
 struct MenuBarOrganizerSettings: View {
     private typealias Editor = MenuBarOrganizerEditorSupport
 
@@ -22,7 +21,6 @@ struct MenuBarOrganizerSettings: View {
     @AppStorage(DefaultsKey.menuBarOrganizerIcon) private var icon = MenuBarOrganizerIcon.chevron
     @AppStorage(DefaultsKey.menuBarOrganizerReveal) private var reveal = MenuBarOrganizerReveal.menuBar
     @AppStorage(DefaultsKey.menuBarOrganizerShelfMonochrome) private var shelfMonochrome = true
-    @State private var draft = MenuBarLayout(hidden: [], visible: [])
     /// The row being dragged, so a drop target knows what entered it.
     @State private var dragging: MenuBarItemIdentity?
 
@@ -63,8 +61,21 @@ struct MenuBarOrganizerSettings: View {
                 }
                 .pickerStyle(.segmented)
                 .disabled(!service.isSupported)
-                .onChange(of: reveal) { _, _ in service.refreshIcon() }
+                .onChange(of: reveal) { _, _ in
+                    service.refreshIcon()
+                    service.refreshAutoRehide()
+                }
                 caption(reveal == .shelf ? strings.revealShelfCaption : strings.revealMenuBarCaption)
+                if reveal == .menuBar {
+                    Picker(strings.autoRehide, selection: $autoRehideSeconds) {
+                        Text(strings.autoRehideNever).tag(0)
+                        ForEach(Self.autoRehideChoices, id: \.self) { seconds in
+                            Text(String(format: strings.autoRehideSecondsFormat, seconds)).tag(seconds)
+                        }
+                    }
+                    .disabled(!service.isSupported)
+                    .onChange(of: autoRehideSeconds) { _, _ in service.refreshAutoRehide() }
+                }
                 if reveal == .shelf {
                     Toggle(strings.shelfMonochrome, isOn: $shelfMonochrome)
                         .disabled(!service.isSupported)
@@ -88,34 +99,22 @@ struct MenuBarOrganizerSettings: View {
 
             if service.state != .off {
                 Group {
-                    tierSection(.show, items: draft.visible, title: strings.showSection,
+                    behaviorNotes
+                    tierSection(.show, items: baseline.visible, title: strings.showSection,
                                 caption: strings.showCaption, empty: strings.showEmpty)
-                    tierSection(.hide, items: draft.hidden, title: strings.hideSection,
+                    tierSection(.hide, items: baseline.hidden, title: strings.hideSection,
                                 caption: strings.hideCaption, empty: strings.hideEmpty)
-                    tierSection(.never, items: draft.neverShown, title: strings.neverSection,
+                    tierSection(.never, items: baseline.neverShown, title: strings.neverSection,
                                 caption: strings.neverCaption, empty: strings.neverEmpty)
-                    applySection
+                    layoutStatus
                 }
                 .disabled(service.state == .applying)
-            }
-
-            Section {
-                Picker(strings.autoRehide, selection: $autoRehideSeconds) {
-                    Text(strings.autoRehideNever).tag(0)
-                    ForEach(Self.autoRehideChoices, id: \.self) { seconds in
-                        Text(String(format: strings.autoRehideSecondsFormat, seconds)).tag(seconds)
-                    }
-                }
-                .disabled(!service.isSupported)
             }
         }
         .formStyle(.grouped)
         .onAppear {
-            draft = baseline
             service.refreshInventory()
         }
-        // A bar that changed under the drawing makes the drawing stale.
-        .onChange(of: baseline) { _, value in draft = value }
     }
 
     // MARK: - Layout
@@ -157,7 +156,7 @@ struct MenuBarOrganizerSettings: View {
             presentation.icon(identity)
                 .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 1) {
-                Text(presentation.name(identity, among: draft.hidden + draft.visible + draft.neverShown))
+                Text(presentation.name(identity, among: baseline.hidden + baseline.visible + baseline.neverShown))
                 if let note {
                     Text(note)
                         .font(.caption)
@@ -196,10 +195,14 @@ struct MenuBarOrganizerSettings: View {
     }
 
     private func move(_ identity: MenuBarItemIdentity, to tier: Editor.Tier, before target: MenuBarItemIdentity?) {
-        draft = Editor.moving(identity, to: tier, before: target, in: draft) { lockReason($0) != nil }
+        guard service.state != .applying, lockReason(identity) == nil else { return }
+        let current = baseline
+        let updated = Editor.moving(identity, to: tier, before: target, in: current) { lockReason($0) != nil }
+        guard updated != current else { return }
+        service.apply(updated, collapseAfterApplying: tier == .hide)
     }
 
-    private var applySection: some View {
+    private var layoutStatus: some View {
         Section {
             HStack(spacing: 8) {
                 if service.state == .applying {
@@ -207,15 +210,6 @@ struct MenuBarOrganizerSettings: View {
                         .controlSize(.small)
                     Text(strings.applying)
                         .foregroundStyle(.secondary)
-                } else {
-                    Button(pendingMoves > 0
-                           ? String(format: strings.applyPendingFormat, pendingMoves)
-                           : strings.apply) {
-                        service.apply(draft)
-                    }
-                    .disabled(pendingMoves == 0)
-                    Button(strings.discard) { draft = baseline }
-                        .disabled(draft == baseline)
                 }
                 Spacer()
                 if let report = service.lastApplyReport {
@@ -224,26 +218,39 @@ struct MenuBarOrganizerSettings: View {
                         .foregroundStyle(.secondary)
                 }
                 Button(strings.refresh) {
-                    draft = baseline
                     service.refreshInventory()
                 }
             }
-            caption(strings.applyHint)
-            caption(strings.dragHint)
-            caption(strings.perAppNote)
-            caption(strings.systemExtrasNote)
         }
     }
 
-    /// The bar the drawing starts from and is compared with.
+    private var behaviorNotes: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(strings.behaviorNoteTitle, systemImage: "info.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text(strings.mouseHint)
+                Text(strings.dragHint)
+                Text(strings.perAppNote)
+                Text(strings.systemExtrasNote)
+            }
+            .font(.callout)
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.accentColor.opacity(0.2), lineWidth: 1)
+            }
+        }
+    }
+
+    /// The current bar, including remembered items absent while it is hidden.
     private var baseline: MenuBarLayout {
         Editor.baseline(layout: service.layout, lastHidden: service.lastHidden,
                         neverShown: service.neverShown, collapsed: service.state == .collapsed)
-    }
-
-    private var pendingMoves: Int {
-        guard let collapser = MenuBarOrganizerCollapser.identity else { return 0 }
-        return Editor.pendingMoves(from: baseline, to: draft, collapser: collapser)
     }
 
     // MARK: - Rows
@@ -333,20 +340,16 @@ struct MenuBarOrganizerSettings: View {
     }
 }
 
-/// Parts the rows live while a row is dragged over a drop target. Where the
-/// row may land is decided by `moved`, which runs the same pure move as the
-/// row menu, so the delegate has no rules of its own.
+/// Commits only a completed drop, using the same move as the row menu.
+/// Hovering or cancelling a drag must not reorder the real menu bar.
 private struct MenuBarOrganizerDropDelegate: DropDelegate {
     @Binding var dragging: MenuBarItemIdentity?
     let moved: (MenuBarItemIdentity) -> Void
 
-    func dropEntered(info: DropInfo) {
-        guard let dragging else { return }
-        moved(dragging)
-    }
-
     func performDrop(info: DropInfo) -> Bool {
+        guard let identity = dragging else { return false }
         dragging = nil
+        moved(identity)
         return true
     }
 

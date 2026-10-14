@@ -47,6 +47,25 @@ def availability_declaration(path, prefix):
 
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    write("MenuBarOrganizerInventory.swift", "import ApplicationServices\nimport CoreGraphics\nimport Foundation\n"
+          + "extension MenuBarOrganizerTests.InventoryReader {\n"
+          + declaration("Sources/Vorssaint/Services/MenuBarOrganizer/MenuBarAccessibilityInventory.swift",
+                        "    private static func statusElement(").replace("private static func", "static func", 1)
+          + "}\n")
+    organizer_settings = "Sources/Vorssaint/UI/Settings/MenuBarOrganizerSettings.swift"
+    write("MenuBarOrganizerRevealActions.swift", "import Foundation\n"
+          + "extension MenuBarOrganizerTests.RevealActions {\nfinal class Service: Fixture {\n"
+          + declaration("Sources/Vorssaint/Services/MenuBarOrganizer/MenuBarOrganizerService.swift",
+                        "    func expand()")
+          + declaration("Sources/Vorssaint/Services/MenuBarOrganizer/MenuBarOrganizerService.swift",
+                        "    func refreshAutoRehide()")
+          + "}\n}\n")
+    write("MenuBarOrganizerSettingsActions.swift", "import Foundation\n"
+          + "extension MenuBarOrganizerTests.SettingsActions {\nfinal class View: Fixture {\n"
+          + declaration(organizer_settings, "    private func move(").replace("private func", "func", 1)
+          + "}\nfinal class Drop: DropFixture {\n"
+          + declaration(organizer_settings, "    func performDrop(info: DropInfo)")
+          + "}\n}\n")
     write("RecorderSystemAudioTapLifecycle.swift", "import CoreAudio\nimport Foundation\n"
           + "extension RecorderSystemAudioTapLifecycleTests {\nfinal class Tap: Fixture, @unchecked Sendable {\n"
           + declaration("Sources/Vorssaint/Services/Recorder/RecorderSystemAudioTap.swift", "    func stop() async")

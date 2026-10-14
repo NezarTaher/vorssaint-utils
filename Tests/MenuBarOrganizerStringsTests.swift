@@ -33,7 +33,6 @@ enum MenuBarOrganizerStringsTests {
             let formats: [(String, [String], String)] = [
                 (strings.unsupportedOSFormat, ["@"], "unsupported OS"),
                 (strings.otherManagerFormat, ["@"], "other manager"),
-                (strings.applyPendingFormat, ["d"], "apply pending"),
                 (strings.autoRehideSecondsFormat, ["d"], "auto re-hide seconds"),
                 (strings.applyReportFormat, ["d", "d"], "apply report"),
                 (strings.problemActivationFormat, ["@"], "activation problem"),

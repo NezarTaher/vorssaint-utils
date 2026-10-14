@@ -528,19 +528,6 @@ enum MenuBarOrganizerEditorSupport {
                                      at: anchor.map { draggedDown ? $0 + 1 : $0 } ?? result[keyPath: path].count)
         return result
     }
-
-    /// How many steps applying `draft` to a bar laid out as `baseline` takes:
-    /// one per drag, and one for a changed set of never-shown items, which
-    /// needs an apply of its own. Items no drag moves are left out, as they
-    /// are when the drags are planned.
-    static func pendingMoves(from baseline: MenuBarLayout, to draft: MenuBarLayout,
-                             collapser: MenuBarItemIdentity) -> Int {
-        let current = (baseline.hidden + [collapser] + baseline.visible)
-            .filter(MenuBarOrganizerPolicy.isMovable)
-        let drags = MenuBarMovePlanner.plan(current: current,
-                                            target: draft.hidden + [collapser] + draft.visible).count
-        return drags + (Set(baseline.neverShown) == Set(draft.neverShown) ? 0 : 1)
-    }
 }
 
 enum MenuBarManagerDetection {

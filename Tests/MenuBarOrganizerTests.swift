@@ -40,6 +40,9 @@ enum MenuBarOrganizerTests {
     static func run(_ suite: TestSuite) {
         icons(suite)
         identities(suite)
+        inventoryElements(suite)
+        settingsActions(suite)
+        revealActions(suite)
         systemItems(suite)
         availability(suite)
         partition(suite)
@@ -52,6 +55,185 @@ enum MenuBarOrganizerTests {
         editor(suite)
         tierMoves(suite)
         managers(suite)
+    }
+
+    /// The production resolver is compiled against this read-only AX tree.
+    enum InventoryReader {
+        final class Element {
+            let role: String
+            let frame: CGRect?
+            var extras: Element?
+            var children: [Element] = []
+            var extrasReads = 0
+            init(_ role: String, frame: CGRect? = nil) {
+                self.role = role
+                self.frame = frame
+            }
+        }
+        typealias AXUIElement = Element
+        static func role(of element: Element) -> String { element.role }
+        static func frame(of element: Element) -> CGRect? { element.frame }
+        static func children(of element: Element) -> [Element] { element.children }
+        static func elementAttribute(_ element: Element, _ attribute: String) -> Element? {
+            precondition(attribute == "AXExtrasMenuBar")
+            element.extrasReads += 1
+            return element.extras
+        }
+    }
+
+    private static func inventoryElements(_ suite: TestSuite) {
+        typealias Reader = InventoryReader
+        let group = CGRect(x: 100, y: 0, width: 38, height: 33)
+        let button = Reader.Element("AXButton", frame: CGRect(x: 107, y: 4.5, width: 24, height: 24))
+        let sibling = Reader.Element("AXMenuBarItem", frame: CGRect(x: 150, y: 4.5, width: 44, height: 24))
+        let extras = Reader.Element("AXMenuBar")
+        extras.children = [sibling, button]
+        let app = Reader.Element("AXApplication")
+        app.extras = extras
+        var cache: [pid_t: [Reader.Element]] = [:]
+        suite.expect(Reader.statusElement(button, groupFrame: group, ownerPID: 100, appItems: &cache) === button,
+                     "a direct status button is kept without reading an application extras bar")
+        suite.expect(Reader.statusElement(app, groupFrame: group, ownerPID: 100, appItems: &cache) === button,
+                     "the macOS 27.0 application wrapper resolves to its actual status button")
+        suite.expect(Reader.statusElement(app, groupFrame: CGRect(x: 148, y: 0, width: 48, height: 33),
+                     ownerPID: 100, appItems: &cache) === sibling && app.extrasReads == 1,
+                     "two groups of one app resolve distinct controls from one cached extras-bar read")
+        suite.expect(Reader.statusElement(app, groupFrame: CGRect(x: 500, y: 0, width: 38, height: 33),
+                     ownerPID: 100, appItems: &cache) == nil,
+                     "an unmatched frame never substitutes a sibling or the application wrapper")
+        let unavailable = Reader.Element("AXApplication")
+        suite.expect(Reader.statusElement(unavailable, groupFrame: group, ownerPID: 200, appItems: &cache) == nil,
+                     "a missing extras bar fails closed and cannot reuse another app's cached controls")
+        extras.children = [button, Reader.Element("AXMenuBarItem", frame: button.frame)]
+        cache = [:]
+        suite.expect(Reader.statusElement(app, groupFrame: group, ownerPID: 100, appItems: &cache) == nil,
+                     "overlapping candidate controls are rejected instead of guessing the boundary")
+        extras.children = [Reader.Element("AXMenuBarItem"), Reader.Element("AXMenuBarItem", frame: .zero)]
+        cache = [:]
+        suite.expect(Reader.statusElement(app, groupFrame: group, ownerPID: 100, appItems: &cache) == nil,
+                     "missing and zero-size control frames cannot identify a status icon")
+    }
+
+    enum SettingsActions {
+        typealias Editor = MenuBarOrganizerEditorSupport
+        final class Service {
+            enum State { case expanded, collapsed, applying }
+            var state = State.expanded
+            var calls: [(MenuBarLayout, Bool)] = []
+            func apply(_ target: MenuBarLayout, collapseAfterApplying: Bool) {
+                calls.append((target, collapseAfterApplying))
+            }
+        }
+        class Fixture {
+            let service = Service()
+            var baseline = MenuBarLayout(hidden: [], visible: [])
+            var locked = Set<MenuBarItemIdentity>()
+            func lockReason(_ identity: MenuBarItemIdentity) -> String? {
+                locked.contains(identity) ? "locked" : nil
+            }
+        }
+        struct DropInfo {}
+        class DropFixture {
+            var dragging: MenuBarItemIdentity?
+            var moves: [MenuBarItemIdentity] = []
+            func moved(_ identity: MenuBarItemIdentity) { moves.append(identity) }
+        }
+    }
+
+    private static func settingsActions(_ suite: TestSuite) {
+        let alpha = identity("com.example.alpha")
+        let beta = identity("com.example.beta")
+        let view = SettingsActions.View()
+        view.baseline = MenuBarLayout(hidden: [], visible: [alpha, beta])
+        view.move(alpha, to: .hide, before: nil)
+        suite.expect(view.service.calls.count == 1 && view.service.calls[0].0.hidden == [alpha]
+                     && view.service.calls[0].0.visible == [beta] && view.service.calls[0].1,
+                     "choosing Hide submits the change immediately and collapses an expanded bar")
+        view.service.calls = []
+        view.baseline = MenuBarLayout(hidden: [alpha], visible: [beta])
+        view.move(alpha, to: .show, before: nil)
+        suite.expect(view.service.calls.count == 1 && !view.service.calls[0].0.hidden.contains(alpha)
+                     && view.service.calls[0].0.visible.contains(alpha) && !view.service.calls[0].1,
+                     "choosing Show always submits immediately without forcing a new collapse")
+        view.service.calls = []
+        view.move(alpha, to: .never, before: nil)
+        suite.expect(view.service.calls.count == 1 && view.service.calls[0].0.neverShown == [alpha],
+                     "choosing Never show also submits immediately")
+        view.service.calls = []
+        view.service.state = .applying
+        view.move(beta, to: .hide, before: nil)
+        suite.expect(view.service.calls.isEmpty, "a change already in flight cannot be superseded by another row action")
+        view.service.state = .expanded
+        view.locked = [beta]
+        view.move(beta, to: .hide, before: nil)
+        suite.expect(view.service.calls.isEmpty, "locked rows do not trigger an automatic apply")
+
+        let drop = SettingsActions.Drop()
+        drop.dragging = alpha
+        suite.expect(drop.performDrop(info: .init()) && drop.moves == [alpha] && drop.dragging == nil,
+                     "a completed drop commits once and clears the dragged row")
+        suite.expect(!drop.performDrop(info: .init()) && drop.moves == [alpha],
+                     "a missing or already-consumed drag does not commit another change")
+    }
+
+    enum RevealActions {
+        enum State { case off, expanded, collapsed, applying }
+        final class Collapser {
+            var collapsed = true
+            func setCollapsed(_ collapsed: Bool, shelfOpen: Bool) { self.collapsed = collapsed }
+        }
+        final class RehideTimer {
+            var invalidated = false
+            func invalidate() { invalidated = true }
+        }
+        class Fixture {
+            var state: State = .collapsed
+            var epoch = 0
+            let collapser = Collapser()
+            var releases: [String] = []
+            var expandedRestrictions = 0
+            var rehideTimer: RehideTimer?
+            var scheduledTimers = 0
+            var restorations: [(Int, Bool)] = []
+            func advance() { epoch += 1 }
+            func release(_ reason: String) { releases.append(reason) }
+            func restrictExpanded() { expandedRestrictions += 1 }
+            func scheduleAutoRehide() { scheduledTimers += 1 }
+            func restoreOrderAfterReveal(token: Int, collapseAfterwards: Bool) {
+                restorations.append((token, collapseAfterwards))
+                state = .applying
+            }
+        }
+    }
+
+    private static func revealActions(_ suite: TestSuite) {
+        let service = RevealActions.Service()
+        service.expand()
+        suite.expect(service.expandedRestrictions == 1 && service.restorations.count == 1
+                     && service.restorations[0].0 == service.epoch && !service.restorations[0].1
+                     && service.state == .applying && !service.collapser.collapsed,
+                     "expanding keeps never-shown icons restricted and restores order before reading the returning bar")
+        service.expand()
+        suite.expect(service.restorations.count == 1,
+                     "another expand cannot adopt a partially restored bar")
+        service.state = .expanded
+        service.expand()
+        suite.expect(service.releases.last == "expand while settling" && service.restorations.count == 1,
+                     "cancelling a pending collapse leaves a bar that was never hidden alone")
+        service.state = .off
+        let epoch = service.epoch
+        service.expand()
+        suite.expect(service.epoch == epoch, "an inactive organizer cannot start restoring icons")
+
+        let oldTimer = RevealActions.RehideTimer()
+        service.rehideTimer = oldTimer
+        service.state = .expanded
+        service.refreshAutoRehide()
+        suite.expect(oldTimer.invalidated && service.rehideTimer == nil && service.scheduledTimers == 1,
+                     "changing the delay while icons are shown cancels the old timer and reschedules immediately")
+        service.state = .collapsed
+        service.refreshAutoRehide()
+        suite.expect(service.scheduledTimers == 1, "a collapsed bar does not start an unnecessary rehide timer")
     }
 
     private static func icons(_ suite: TestSuite) {
@@ -283,6 +465,12 @@ enum MenuBarOrganizerTests {
         check([a, b, c, d], [d, c, b, a], moves: 3, "a full reversal keeps one item in place")
         check([a, b, c], [c, d, a, b], moves: 1, gives: [c, a, b], "a target item that is gone is skipped")
         check([e, a, b], [b, a], moves: 1, gives: [e, b, a], "an unmentioned item keeps the left end")
+        check([c, a, b, collapser, d], [a, b, c, collapser, d], moves: 1,
+              "a returning hidden icon regains its former slot rather than staying first")
+        check([a, b, collapser, d, c], [a, b, c, collapser, d], moves: 1,
+              "a returning hidden icon stays on its original side of the collapser")
+        check([e, c, a, b, collapser, d], [a, b, c, collapser, d], moves: 1,
+              gives: [e, a, b, c, collapser, d], "launch reveal restores existing positions and keeps the new icon")
 
         suite.expect(MenuBarMovePlanner.plan(current: [a, b, c, d], target: [d, a, b, c])
                          == [MenuBarMove(item: d, after: nil)],
@@ -385,29 +573,7 @@ enum MenuBarOrganizerTests {
         suite.expect(drawn.hidden == layout.hidden && drawn.visible == Array(layout.visible.dropFirst()),
                      "a never-shown item a walk happened to see is on neither side")
 
-        suite.expect(Editor.pendingMoves(from: layout, to: layout, collapser: collapser) == 0,
-                     "an untouched drawing has nothing to apply")
-        let shown = Editor.moving(alpha, to: .show, before: gamma, in: layout) { _ in false }
-        let hidden = Editor.moving(gamma, to: .hide, before: nil, in: layout) { _ in false }
-        suite.expect(Editor.pendingMoves(from: layout, to: shown, collapser: collapser) == 1
-                        && Editor.pendingMoves(from: layout, to: hidden, collapser: collapser) == 1,
-                     "crossing the collapser is one drag")
-        suite.expect(Editor.pendingMoves(from: drawn, to: Editor.moving(delta, to: .show, before: nil, in: drawn) { _ in false },
-                                         collapser: collapser) == 1,
-                     "a changed never-shown set needs an apply although nothing in the bar can be dragged yet")
         let battery = system("battery"), clock = system("clock")
-        suite.expect(Editor.pendingMoves(from: layout, to: Editor.moving(battery, to: .hide, before: nil, in: layout) { _ in false },
-                                         collapser: collapser) == 1,
-                     "moving a system item is a pending drag")
-        var pinned = layout
-        pinned.visible.append(clock)
-        var pinnedMoved = pinned
-        pinnedMoved.visible.swapAt(0, pinnedMoved.visible.count - 1)
-        var withoutPinned = pinnedMoved
-        withoutPinned.visible.removeAll { $0 == clock }
-        suite.expect(Editor.pendingMoves(from: pinned, to: pinnedMoved, collapser: collapser)
-                        == Editor.pendingMoves(from: layout, to: withoutPinned, collapser: collapser),
-                     "an item macOS pins never counts as a pending drag")
 
         // The agent draws every system item, yet each is kept out alone.
         var systems = layout
