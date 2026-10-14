@@ -26,7 +26,7 @@ final class MenuBarOrganizerCollapser: NSObject {
 
     func install(collapsed: Bool) {
         guard statusItem == nil else {
-            setCollapsed(collapsed)
+            setCollapsed(collapsed, shelfOpen: false)
             return
         }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -42,7 +42,7 @@ final class MenuBarOrganizerCollapser: NSObject {
             button.setAccessibilityIdentifier(Self.accessibilityName)
             button.setAccessibilityTitle(Self.accessibilityName)
         }
-        setCollapsed(collapsed)
+        setCollapsed(collapsed, shelfOpen: false)
     }
 
     func remove() {
@@ -51,14 +51,31 @@ final class MenuBarOrganizerCollapser: NSObject {
         self.statusItem = nil
     }
 
-    /// Draws the icon chosen in Settings for the state. The name it is found
-    /// by stays the same whatever it looks like.
-    func setCollapsed(_ collapsed: Bool) {
-        let icon = MenuBarOrganizerIcon.stored(UserDefaults.standard.string(forKey: DefaultsKey.menuBarOrganizerIcon))
-        let image = NSImage(systemSymbolName: icon.symbol(collapsed: collapsed), accessibilityDescription: nil)
+    /// Draws the icon chosen in Settings for the state and the reveal. The
+    /// name it is found by stays the same whatever it looks like.
+    func setCollapsed(_ collapsed: Bool, shelfOpen: Bool) {
+        let defaults = UserDefaults.standard
+        let icon = MenuBarOrganizerIcon.stored(defaults.string(forKey: DefaultsKey.menuBarOrganizerIcon))
+        let reveal = MenuBarOrganizerReveal.stored(defaults.string(forKey: DefaultsKey.menuBarOrganizerReveal))
+        let symbol = icon.symbol(collapsed: collapsed, reveal: reveal, shelfOpen: shelfOpen)
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         image?.isTemplate = true
         statusItem?.button?.image = image
     }
+
+    /// The window of the collapser's button, in screen coordinates, to hang
+    /// the shelf from. nil before the item is installed, and while macOS
+    /// reports a frame outside any menu bar (a bar that hides itself parks
+    /// the window out of sight).
+    var anchorFrame: NSRect? {
+        guard let frame = buttonWindow?.frame,
+              StatusItemAnchorSupport.isTrustworthyStatusFrame(frame) else { return nil }
+        return frame
+    }
+
+    /// The window the collapser's clicks arrive in, so the shelf can let them
+    /// through to the toggle instead of treating them as a click outside.
+    var buttonWindow: NSWindow? { statusItem?.button?.window }
 
     @objc private func clicked(_ sender: NSStatusBarButton) {
         if NSApp.currentEvent?.type == .rightMouseUp {

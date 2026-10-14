@@ -37,6 +37,7 @@ enum MenuBarOrganizerStringsTests {
                 (strings.autoRehideSecondsFormat, ["d"], "auto re-hide seconds"),
                 (strings.applyReportFormat, ["d", "d"], "apply report"),
                 (strings.problemActivationFormat, ["@"], "activation problem"),
+                (strings.problemPeekFailedFormat, ["@"], "peek problem"),
             ]
             for (format, expected, label) in formats {
                 let actual = TestFormat.parse(format)?.conversions ?? ["invalid format"]

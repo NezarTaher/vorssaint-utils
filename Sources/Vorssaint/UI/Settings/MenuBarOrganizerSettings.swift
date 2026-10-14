@@ -4,9 +4,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The Menu Bar Organizer page: the switch, the collapser's icon, a drawing of
-/// the bar in three tiers (always shown, hidden behind the collapser, never
-/// shown) and the auto re-hide delay. Rows are dragged within and across the
+/// The Menu Bar Organizer page: the switch, the collapser's icon, where the
+/// hidden icons show (the bar or a shelf), a drawing of the bar in three tiers
+/// (always shown, hidden behind the collapser, never shown) and the auto
+/// re-hide delay. Rows are dragged within and across the
 /// tiers. The drawing is a local copy; the bar only changes when it is applied.
 struct MenuBarOrganizerSettings: View {
     private typealias Editor = MenuBarOrganizerEditorSupport
@@ -19,6 +20,8 @@ struct MenuBarOrganizerSettings: View {
     @AppStorage(DefaultsKey.menuBarOrganizerEnabled) private var enabled = false
     @AppStorage(DefaultsKey.menuBarOrganizerAutoRehideSeconds) private var autoRehideSeconds = 0
     @AppStorage(DefaultsKey.menuBarOrganizerIcon) private var icon = MenuBarOrganizerIcon.chevron
+    @AppStorage(DefaultsKey.menuBarOrganizerReveal) private var reveal = MenuBarOrganizerReveal.menuBar
+    @AppStorage(DefaultsKey.menuBarOrganizerShelfMonochrome) private var shelfMonochrome = true
     @State private var draft = MenuBarLayout(hidden: [], visible: [])
     /// The row being dragged, so a drop target knows what entered it.
     @State private var dragging: MenuBarItemIdentity?
@@ -47,12 +50,25 @@ struct MenuBarOrganizerSettings: View {
                 }
                 Picker(strings.icon, selection: $icon) {
                     ForEach(MenuBarOrganizerIcon.allCases, id: \.self) { choice in
-                        Label(iconName(choice), systemImage: choice.symbol(collapsed: true)).tag(choice)
+                        Label(iconName(choice), systemImage: choice.symbol(collapsed: true, reveal: reveal,
+                                                                           shelfOpen: false)).tag(choice)
                     }
                 }
                 .pickerStyle(.segmented)
                 .disabled(!service.isSupported)
                 .onChange(of: icon) { _, _ in service.refreshIcon() }
+                Picker(strings.reveal, selection: $reveal) {
+                    Text(strings.revealMenuBar).tag(MenuBarOrganizerReveal.menuBar)
+                    Text(strings.revealShelf).tag(MenuBarOrganizerReveal.shelf)
+                }
+                .pickerStyle(.segmented)
+                .disabled(!service.isSupported)
+                .onChange(of: reveal) { _, _ in service.refreshIcon() }
+                caption(reveal == .shelf ? strings.revealShelfCaption : strings.revealMenuBarCaption)
+                if reveal == .shelf {
+                    Toggle(strings.shelfMonochrome, isOn: $shelfMonochrome)
+                        .disabled(!service.isSupported)
+                }
                 ForEach(service.runningManagers, id: \.self) { manager in
                     warning(String(format: strings.otherManagerFormat, manager))
                 }
@@ -138,10 +154,10 @@ struct MenuBarOrganizerSettings: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.tertiary)
                 .opacity(locked == nil ? 1 : 0)
-            appIcon(identity)
+            presentation.icon(identity)
                 .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 1) {
-                Text(name(identity))
+                Text(presentation.name(identity, among: draft.hidden + draft.visible + draft.neverShown))
                 if let note {
                     Text(note)
                         .font(.caption)
@@ -232,8 +248,9 @@ struct MenuBarOrganizerSettings: View {
 
     // MARK: - Rows
 
-    private func snapshot(_ identity: MenuBarItemIdentity) -> MenuBarItemSnapshot? {
-        service.inventory.first { $0.identity == identity }
+    private var presentation: MenuBarOrganizerItemPresentation {
+        MenuBarOrganizerItemPresentation(inventory: service.inventory, lastHidden: service.lastHidden,
+                                         neverShown: service.neverShown, strings: strings)
     }
 
     /// Why a row cannot be hidden, dragged or kept out of the bar, nil when it can.
@@ -244,7 +261,7 @@ struct MenuBarOrganizerSettings: View {
         if identity.bundleID == MenuBarOrganizerPolicy.agentBundleID { return strings.lockedSystem }
         if identity.bundleID == ownBundleID { return strings.lockedOwn }
         // Only items that hide are remembered, so one without a snapshot does.
-        guard let item = snapshot(identity),
+        guard let item = presentation.snapshot(identity),
               !MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID) else { return nil }
         return strings.lockedHelper
     }
@@ -252,40 +269,10 @@ struct MenuBarOrganizerSettings: View {
     /// Says that macOS hides the row's icon along with any other, whatever
     /// its tier. Unlike a lock reason it leaves the row free to move.
     private func unsignedNote(_ identity: MenuBarItemIdentity) -> String? {
-        switch snapshot(identity).flatMap(Editor.note(for:)) {
+        switch presentation.snapshot(identity).flatMap(Editor.note(for:)) {
         case .unsigned: strings.lockedUnsigned
         case nil: nil
         }
-    }
-
-    private func name(_ identity: MenuBarItemIdentity) -> String {
-        if let system = MenuBarSystemItem.item(for: identity) { return systemName(system) }
-        let appName = snapshot(identity)?.appName
-            ?? (service.lastHidden + service.neverShown).first { $0.identity == identity }?.appName
-            ?? identity.title
-        // Several icons of one app are told apart by their own names.
-        let siblings = (draft.hidden + draft.visible + draft.neverShown)
-            .filter { $0.bundleID == identity.bundleID }.count
-        return siblings > 1 && appName != identity.title ? "\(appName) (\(identity.title))" : appName
-    }
-
-    @ViewBuilder
-    private func appIcon(_ identity: MenuBarItemIdentity) -> some View {
-        if let system = MenuBarSystemItem.item(for: identity) {
-            Image(systemName: system.symbol)
-                .foregroundStyle(.secondary)
-        } else if identity.bundleID != MenuBarOrganizerPolicy.agentBundleID, let url = bundleURL(identity) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                .resizable()
-        } else {
-            Image(systemName: "menubar.rectangle")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func bundleURL(_ identity: MenuBarItemIdentity) -> URL? {
-        snapshot(identity).flatMap { NSRunningApplication(processIdentifier: $0.pid)?.bundleURL }
-            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: identity.bundleID)
     }
 
     // MARK: - Texts
@@ -305,20 +292,6 @@ struct MenuBarOrganizerSettings: View {
         case .dots: return strings.iconDots
         case .lines: return strings.iconLines
         case .grid: return strings.iconGrid
-        }
-    }
-
-    private func systemName(_ item: MenuBarSystemItem) -> String {
-        switch item {
-        case .battery: return strings.systemBattery
-        case .bluetooth: return strings.systemBluetooth
-        case .clock: return strings.systemClock
-        case .displays: return strings.systemDisplays
-        case .keyboard: return strings.systemKeyboard
-        case .sound: return strings.systemSound
-        case .wifi: return strings.systemWiFi
-        case .screenMirroring: return strings.systemScreenMirroring
-        case .controlCenter: return strings.systemControlCenter
         }
     }
 
@@ -343,6 +316,7 @@ struct MenuBarOrganizerSettings: View {
         case .collapserNotFound: return strings.problemCollapserNotFound
         case .activationFailed(let reason): return String(format: strings.problemActivationFormat, reason)
         case .nothingToHide: return strings.problemNothingToHide
+        case .peekFailed(let name): return String(format: strings.problemPeekFailedFormat, name)
         }
     }
 

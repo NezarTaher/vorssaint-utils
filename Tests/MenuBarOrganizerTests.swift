@@ -44,6 +44,7 @@ enum MenuBarOrganizerTests {
         availability(suite)
         partition(suite)
         allowlist(suite)
+        peekSets(suite)
         movePlanner(suite)
         dropPoints(suite)
         quietGate(suite)
@@ -58,12 +59,29 @@ enum MenuBarOrganizerTests {
                         && MenuBarOrganizerIcon.stored("sparkles") == .chevron
                         && MenuBarOrganizerIcon.stored(nil) == .chevron,
                      "an unknown or missing stored icon falls back to the chevron")
-        suite.expect(MenuBarOrganizerIcon.chevron.symbol(collapsed: true) == "chevron.left"
-                        && MenuBarOrganizerIcon.chevron.symbol(collapsed: false) == "chevron.right",
-                     "the chevron points at the hidden icons while they are hidden")
-        suite.expect(MenuBarOrganizerIcon.allCases.filter { $0 != .chevron }
-                        .allSatisfy { $0.symbol(collapsed: true) == $0.symbol(collapsed: false) },
-                     "the other icons look the same in both states")
+        suite.expect(MenuBarOrganizerReveal.stored("shelf") == .shelf
+                        && MenuBarOrganizerReveal.stored("drawer") == .menuBar
+                        && MenuBarOrganizerReveal.stored(nil) == .menuBar,
+                     "an unknown or missing stored reveal falls back to the menu bar")
+
+        let chevron = MenuBarOrganizerIcon.chevron
+        suite.expect(chevron.symbol(collapsed: true, reveal: .menuBar, shelfOpen: false) == "chevron.left"
+                        && chevron.symbol(collapsed: false, reveal: .menuBar, shelfOpen: false) == "chevron.right"
+                        && chevron.symbol(collapsed: true, reveal: .menuBar, shelfOpen: true) == "chevron.left",
+                     "in the bar the chevron points at the hidden icons while they are hidden")
+        suite.expect(chevron.symbol(collapsed: true, reveal: .shelf, shelfOpen: false) == "chevron.down"
+                        && chevron.symbol(collapsed: true, reveal: .shelf, shelfOpen: true) == "chevron.up"
+                        && chevron.symbol(collapsed: false, reveal: .shelf, shelfOpen: false) == "chevron.down",
+                     "with a shelf the chevron points down while it is closed and up while it is open")
+        let states = [false, true].flatMap { collapsed in
+            MenuBarOrganizerReveal.allCases.flatMap { reveal in
+                [false, true].map { (collapsed, reveal, $0) }
+            }
+        }
+        suite.expect(MenuBarOrganizerIcon.allCases.filter { $0 != .chevron }.allSatisfy { icon in
+                        Set(states.map { icon.symbol(collapsed: $0.0, reveal: $0.1, shelfOpen: $0.2) }).count == 1
+                     },
+                     "the other icons ignore the state, the reveal and the shelf")
     }
 
     private static func identities(_ suite: TestSuite) {
@@ -224,6 +242,21 @@ enum MenuBarOrganizerTests {
         suite.expect(MenuBarOrganizerLayout.allowlist(hidden: bundles("com.example.alpha"), neverShown: Hidden(), observed: [],
                                                       running: [], ownBundleID: "") == nil,
                      "without an own bundle id there is nothing safe to allow")
+    }
+
+    private static func peekSets(_ suite: TestSuite) {
+        let set = MenuBarHiddenSet([identity("com.example.alpha", "first"), identity("com.example.alpha", "second"),
+                                    identity("com.example.beta"), system("wifi"), system("battery")])
+        var withoutAlpha = set
+        withoutAlpha.bundles.remove("com.example.alpha")
+        suite.expect(set.excluding(identity("com.example.alpha", "second")) == withoutAlpha,
+                     "peeking at an app's icon reveals its bundle and keeps everything else hidden")
+        var withoutWiFi = set
+        withoutWiFi.systemItems.remove(.wifi)
+        suite.expect(set.excluding(system("wifi")) == withoutWiFi,
+                     "peeking at a system item reveals that item only, not the agent's bundle")
+        suite.expect(set.excluding(identity("com.example.gamma")) == set && set.excluding(system("sound")) == set,
+                     "an item that is not hidden changes nothing")
     }
 
     private static func movePlanner(_ suite: TestSuite) {

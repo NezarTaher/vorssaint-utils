@@ -39,6 +39,22 @@ enum MenuBarAccessibilityInventory {
 
     /// Blocking walk for callers that already run in the background.
     static func walkNow() -> [MenuBarItemSnapshot] {
+        walkElements().map(\.item)
+    }
+
+    /// The Accessibility element behind one item of the main bar: the app-owned
+    /// leaf of a third-party item, the AXMenuBarItem of a system item. Walks off
+    /// the main thread and answers on it; nil when the item is not in the bar.
+    static func locate(_ identity: MenuBarItemIdentity, completion: @escaping (AXUIElement?) -> Void) {
+        queue.async {
+            let element = walkElements().first { $0.item.identity == identity }?.element
+            DispatchQueue.main.async { completion(element) }
+        }
+    }
+
+    /// The walk itself, each item with the element it was named after, so the
+    /// walk and the locator classify a group the same way.
+    private static func walkElements() -> [(item: MenuBarItemSnapshot, element: AXUIElement)] {
         guard AXIsProcessTrusted(),
               let agent = NSRunningApplication
                   .runningApplications(withBundleIdentifier: MenuBarOrganizerPolicy.agentBundleID).first
@@ -60,23 +76,25 @@ enum MenuBarAccessibilityInventory {
             .compactMap { group in frame(of: group).map { (group: group, frame: $0) } }
             .filter { $0.frame.width > 0 }
             .sorted { $0.frame.minX < $1.frame.minX }
-        var items: [MenuBarItemSnapshot] = []
+        var items: [(item: MenuBarItemSnapshot, element: AXUIElement)] = []
         var taken = Set<MenuBarItemIdentity>()
         var hosts: [pid_t: Host?] = [:]
         for (group, frame) in groups {
-            guard let item = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
+            guard let described = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
             else { continue }
-            taken.insert(item.identity)
-            items.append(item)
+            taken.insert(described.item.identity)
+            items.append(described)
         }
         return items
     }
 
     // MARK: - Classification
 
+    /// The item a group stands for and the leaf that names it, the one a
+    /// press goes to.
     private static func describe(_ group: AXUIElement, frame: CGRect, agentPID: pid_t,
                                  taken: Set<MenuBarItemIdentity>,
-                                 hosts: inout [pid_t: Host?]) -> MenuBarItemSnapshot? {
+                                 hosts: inout [pid_t: Host?]) -> (item: MenuBarItemSnapshot, element: AXUIElement)? {
         let leaves = children(of: group)
         // Usually an AXButton, but a custom status view can surface as static
         // text or an unknown role: whatever the agent does not own names its app.
@@ -88,9 +106,9 @@ enum MenuBarAccessibilityInventory {
             let identity = MenuBarItemIdentity.make(
                 bundleID: host.bundleID, identifier: string(leaf, kAXIdentifierAttribute),
                 description: string(leaf, kAXDescriptionAttribute), taken: taken)
-            return MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
-                                       appName: host.name, hostIsBundleless: host.isBundleless,
-                                       hostIsAppleSigned: host.isAppleSigned)
+            return (MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
+                                        appName: host.name, hostIsBundleless: host.isBundleless,
+                                        hostIsAppleSigned: host.isAppleSigned), leaf)
         }
         for leaf in leaves where role(of: leaf) == kAXGroupRole {
             for extra in children(of: leaf) where role(of: extra) == kAXMenuBarItemRole {
@@ -98,9 +116,9 @@ enum MenuBarAccessibilityInventory {
                       identifier.hasPrefix(systemIdentifierPrefix) else { continue }
                 let identity = MenuBarItemIdentity.make(bundleID: MenuBarOrganizerPolicy.agentBundleID,
                                                         identifier: identifier, description: nil, taken: taken)
-                return MenuBarItemSnapshot(identity: identity, frame: frame, pid: agentPID,
-                                           appName: string(extra, kAXDescriptionAttribute),
-                                           hostIsBundleless: false, hostIsAppleSigned: true)
+                return (MenuBarItemSnapshot(identity: identity, frame: frame, pid: agentPID,
+                                            appName: string(extra, kAXDescriptionAttribute),
+                                            hostIsBundleless: false, hostIsAppleSigned: true), extra)
             }
         }
         return nil

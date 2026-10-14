@@ -363,7 +363,8 @@ enum SettingsDirectory {
                                                  FeatureStrings.menuBarOrganizer(language).autoRehide,
                                                  FeatureStrings.menuBarOrganizer(language).neverSection,
                                                  FeatureStrings.menuBarOrganizer(language).icon,
-                                                 "menu bar", "icons", "hide", "chevron", "bartender"]),
+                                                 FeatureStrings.menuBarOrganizer(language).reveal,
+                                                 "menu bar", "icons", "hide", "chevron", "shelf", "bartender"]),
             ]),
             (categories.utilities, [
                 SettingsDirectoryItem(page: .notch,

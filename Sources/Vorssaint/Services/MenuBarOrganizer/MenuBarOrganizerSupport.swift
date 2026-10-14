@@ -129,6 +129,18 @@ struct MenuBarHiddenSet: Equatable {
             }
         }
     }
+
+    /// The set without the host of `identity`: its bundle, or its system
+    /// item. What a peek keeps hidden while that one icon is in the bar.
+    func excluding(_ identity: MenuBarItemIdentity) -> MenuBarHiddenSet {
+        var rest = self
+        if let system = MenuBarSystemItem.item(for: identity) {
+            rest.systemItems.remove(system)
+        } else {
+            rest.bundles.remove(identity.bundleID)
+        }
+        return rest
+    }
 }
 
 enum MenuBarOrganizerAvailability {
@@ -179,11 +191,16 @@ enum MenuBarOrganizerPolicy {
 enum MenuBarOrganizerIcon: String, CaseIterable {
     case chevron, dots, lines, grid
 
-    /// SF Symbol for the state. Only the chevron changes with the state: it
-    /// points at the hidden icons while they are hidden.
-    func symbol(collapsed: Bool) -> String {
+    /// SF Symbol for the state. Only the chevron changes: in the bar it points
+    /// at the hidden icons while they are hidden, with a shelf it points at
+    /// the shelf, down while it is closed and up while it is open.
+    func symbol(collapsed: Bool, reveal: MenuBarOrganizerReveal, shelfOpen: Bool) -> String {
         switch self {
-        case .chevron: return collapsed ? "chevron.left" : "chevron.right"
+        case .chevron:
+            switch reveal {
+            case .menuBar: return collapsed ? "chevron.left" : "chevron.right"
+            case .shelf: return shelfOpen ? "chevron.up" : "chevron.down"
+            }
         case .dots: return "ellipsis"
         case .lines: return "line.3.horizontal"
         case .grid: return "circle.grid.2x2"
@@ -193,6 +210,17 @@ enum MenuBarOrganizerIcon: String, CaseIterable {
     /// The icon a stored preference names, the chevron when it names none.
     static func stored(_ raw: String?) -> MenuBarOrganizerIcon {
         raw.flatMap(MenuBarOrganizerIcon.init(rawValue:)) ?? .chevron
+    }
+}
+
+/// Where the hidden icons show when the collapser is clicked: back in the
+/// bar, or in a shelf below the collapser while the bar stays collapsed.
+enum MenuBarOrganizerReveal: String, CaseIterable {
+    case menuBar, shelf
+
+    /// The reveal a stored preference names, the bar when it names none.
+    static func stored(_ raw: String?) -> MenuBarOrganizerReveal {
+        raw.flatMap(MenuBarOrganizerReveal.init(rawValue:)) ?? .menuBar
     }
 }
 

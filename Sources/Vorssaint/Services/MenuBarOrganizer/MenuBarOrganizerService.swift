@@ -21,10 +21,16 @@ import os
 /// hide and move like an app's; the clock and Control Center, which macOS
 /// pins, and the agent's other items are left alone.
 ///
+/// With the shelf chosen as the reveal, a click on the collapsed collapser
+/// drops a shelf listing the hidden icons instead of expanding the bar. Picking
+/// one peeks: only that icon's host returns to the bar, its menu is opened
+/// with an Accessibility press, and it hides again once the menu has closed.
+///
 /// Every doubt resolves towards a visible bar: an empty walk, a missing
 /// collapser, a refused activation or a revoked permission drops the
-/// restriction, never-shown icons included. Main thread only, like the other services; the Accessibility
-/// walks and the drags run on background queues.
+/// restriction, never-shown icons included. Main thread only, like the other
+/// services; the Accessibility walks, the presses and the drags run on
+/// background queues.
 ///
 /// Every inventory, activation and release is logged, at the level the
 /// system keeps on disk. To read what the organizer saw and decided (the
@@ -40,6 +46,8 @@ final class MenuBarOrganizerService: ObservableObject {
         case collapserNotFound
         case activationFailed(String)
         case nothingToHide
+        /// The shelf could not open this item; it names the item.
+        case peekFailed(String)
     }
 
     @Published private(set) var state: State = .off
@@ -76,6 +84,16 @@ final class MenuBarOrganizerService: ObservableObject {
     private static let launchRevealWindow: TimeInterval = 2.5
     /// Launches in a burst share one reveal, which may stretch this far.
     private static let launchRevealLimit: TimeInterval = 6
+    private static let peekLocateInterval: TimeInterval = 0.2
+    private static let peekLocateWindow: TimeInterval = 2.5
+    private static let peekWatchInterval: TimeInterval = 0.25
+    /// The menu must have appeared this long after the press, or there is none.
+    private static let peekMenuGrace: TimeInterval = 1.5
+    /// A menu left open this long is given up on; the icon hides again.
+    private static let peekLimit: TimeInterval = 90
+    /// Some status menus hold the reply to a press until they close; waiting
+    /// longer than this would only delay the watch.
+    private static let peekPressTimeout: Float = 1
     private static let logBundlesPerLine = 15
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "vorssaint",
                                     category: "menu-bar-organizer")
@@ -84,12 +102,16 @@ final class MenuBarOrganizerService: ObservableObject {
 
     private let assertion = MenuBarVisibilityAssertion()
     private let collapser = MenuBarOrganizerCollapser()
+    private let shelf = MenuBarOrganizerShelf()
     private let ownBundleID = Bundle.main.bundleIdentifier ?? ""
     /// Advances whenever the user or the system changes course, so a walk or
     /// timer that answers late knows it has been overtaken.
     private var epoch = 0
     private var quietGate = MenuBarQuietGate()
     private var rehideTimer: Timer?
+    /// Watches the menu a peek opened, to hide its icon again.
+    private var peekTimer: Timer?
+    private var peekSawMenu = false
     /// What the last collapse hid, kept for the wake re-assert.
     private var hidden = MenuBarHiddenSet()
     /// Bundles launched while icons were hidden whose icons the open bar is
@@ -110,6 +132,9 @@ final class MenuBarOrganizerService: ObservableObject {
             SettingsRouter.shared.page = .menuBarOrganizer
             (NSApp.delegate as? AppDelegate)?.openSettingsWindow()
         }
+        shelf.onSelect = { [weak self] in self?.peek($0) }
+        shelf.onClosed = { [weak self] in self?.refreshIcon() }
+        shelf.collapserWindow = { [weak self] in self?.collapser.buttonWindow }
     }
 
     // MARK: - Lifecycle
@@ -162,9 +187,9 @@ final class MenuBarOrganizerService: ObservableObject {
         collapseWhenQuiet()
     }
 
-    /// Shows every icon, the never-shown ones too, and removes the collapser.
-    /// Safe to call at any time,
-    /// including on quit and while a reorder pass is running.
+    /// Shows every icon, the never-shown ones too, closes the shelf and
+    /// removes the collapser. Safe to call at any time, including on quit and
+    /// while a reorder pass is running.
     func stop() {
         advance()
         release("stop")
@@ -180,17 +205,32 @@ final class MenuBarOrganizerService: ObservableObject {
 
     // MARK: - Showing and hiding
 
+    /// The collapser's click. With the shelf as the reveal a collapsed bar
+    /// stays collapsed and the shelf opens or closes instead.
     func toggle() {
         switch state {
-        case .collapsed: expand()
+        case .collapsed:
+            guard reveal == .shelf else {
+                expand()
+                return
+            }
+            shelf.toggle(anchor: collapser.anchorFrame)
+            refreshIcon()
         case .expanded: collapse()
         case .off, .applying: break
         }
     }
 
-    /// Redraws the collapser after its icon was changed in Settings.
+    /// Redraws the collapser after its icon or the reveal was changed in
+    /// Settings, or the shelf opened or closed. Leaving the shelf for the bar
+    /// closes it.
     func refreshIcon() {
-        collapser.setCollapsed(state == .collapsed)
+        if reveal == .menuBar { shelf.close() }
+        collapser.setCollapsed(state == .collapsed, shelfOpen: shelf.isOpen)
+    }
+
+    private var reveal: MenuBarOrganizerReveal {
+        MenuBarOrganizerReveal.stored(UserDefaults.standard.string(forKey: DefaultsKey.menuBarOrganizerReveal))
     }
 
     /// Hides the icons left of the collapser, reading the boundary afresh.
@@ -206,7 +246,7 @@ final class MenuBarOrganizerService: ObservableObject {
         let wasCollapsed = state == .collapsed
         advance()
         state = .expanded
-        collapser.setCollapsed(false)
+        collapser.setCollapsed(false, shelfOpen: false)
         // A collapse that was still waiting never restricted the bar, and a
         // bar that is still settling must stay unrestricted.
         guard wasCollapsed else {
@@ -363,7 +403,7 @@ final class MenuBarOrganizerService: ObservableObject {
             }
             self.problem = nil
             self.state = .collapsed
-            self.collapser.setCollapsed(true)
+            self.collapser.setCollapsed(true, shelfOpen: false)
         }
         guard restricted else {
             failOpen(.nothingToHide)
@@ -374,12 +414,13 @@ final class MenuBarOrganizerService: ObservableObject {
     }
 
     /// Shows the whole bar, never-shown icons included, and says why hiding
-    /// is paused.
+    /// is paused. The shelf has nothing left to show.
     private func failOpen(_ reason: Problem) {
         release("fail open: \(reason)")
         problem = reason
         if state == .collapsed { state = .expanded }
-        collapser.setCollapsed(false)
+        shelf.close()
+        collapser.setCollapsed(false, shelfOpen: false)
     }
 
     private func adopt(_ items: [MenuBarItemSnapshot]) {
@@ -429,16 +470,144 @@ final class MenuBarOrganizerService: ObservableObject {
         rehideTimer = timer
     }
 
-    /// Invalidates everything still pending and returns the new epoch.
+    /// Invalidates everything still pending, a peek included, and returns the
+    /// new epoch. Nothing that changes course wants the shelf open.
     @discardableResult
     private func advance() -> Int {
         epoch += 1
         rehideTimer?.invalidate()
         rehideTimer = nil
+        peekTimer?.invalidate()
+        peekTimer = nil
+        shelf.close()
         awaitedLaunches.removeAll()
         applyCancellation?.cancel()
         applyCancellation = nil
         return epoch
+    }
+
+    // MARK: - Peeking from the shelf
+
+    /// Reveals one hidden icon, opens its menu and hides it again when the menu
+    /// closes. The rest of the bar stays as it is, and the state stays
+    /// collapsed throughout.
+    func peek(_ identity: MenuBarItemIdentity) {
+        guard state == .collapsed, assertion.isActive, AXIsProcessTrusted() else { return }
+        let token = advance()
+        let name = peekName(identity)
+        Self.log.notice("peek starts for \(identity.bundleID, privacy: .public) | \(identity.title, privacy: .public)")
+        // Swapped without a gap: the others never flash into the bar.
+        let restricted = activate(hiding: hidden.excluding(identity), for: "peek") { [weak self] failure in
+            guard let self else { return }
+            if let failure {
+                self.failOpen(.activationFailed(failure))
+                return
+            }
+            self.locateForPeek(identity, name: name, token: token,
+                               deadline: ProcessInfo.processInfo.systemUptime + Self.peekLocateWindow)
+        }
+        guard !restricted else { return }
+        release("peek: nothing else hidden")
+        locateForPeek(identity, name: name, token: token,
+                      deadline: ProcessInfo.processInfo.systemUptime + Self.peekLocateWindow)
+    }
+
+    /// The icon returns a moment after the restriction changed, so it is
+    /// looked for until the deadline.
+    private func locateForPeek(_ identity: MenuBarItemIdentity, name: String, token: Int, deadline: TimeInterval) {
+        MenuBarAccessibilityInventory.locate(identity) { [weak self] element in
+            guard let self, self.epoch == token else { return }
+            if let element {
+                self.pressForPeek(element, isSystem: identity.bundleID == MenuBarOrganizerPolicy.agentBundleID,
+                                  name: name, token: token)
+                return
+            }
+            guard ProcessInfo.processInfo.systemUptime < deadline else {
+                Self.log.notice("peek: \(identity.bundleID, privacy: .public) did not return to the bar")
+                self.endPeek(problem: .peekFailed(name))
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.peekLocateInterval) { [weak self] in
+                guard let self, self.epoch == token else { return }
+                self.locateForPeek(identity, name: name, token: token, deadline: deadline)
+            }
+        }
+    }
+
+    /// Presses the icon off the main thread. A status menu that holds the
+    /// reply until it closes answers `.cannotComplete`, which counts as opened.
+    /// A refused press shows the whole bar, so the real icon can be clicked.
+    private func pressForPeek(_ element: AXUIElement, isSystem: Bool, name: String, token: Int) {
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(element, &owner) == .success else {
+            expand()
+            problem = .peekFailed(name)
+            return
+        }
+        let ownerPID = owner
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let pressed = ProcessInfo.processInfo.systemUptime
+            AXUIElementSetMessagingTimeout(element, Self.peekPressTimeout)
+            let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            DispatchQueue.main.async { [weak self] in
+                Self.log.notice("peek press result: \(result.rawValue, privacy: .public)")
+                guard let self, self.epoch == token else { return }
+                guard result == .success || result == .cannotComplete else {
+                    self.expand()
+                    self.problem = .peekFailed(name)
+                    return
+                }
+                self.watchPeek(ownerPID: ownerPID, isSystem: isSystem, pressed: pressed, token: token)
+            }
+        }
+    }
+
+    /// Hides the icon again once its menu has come and gone, when no menu
+    /// showed within the grace (the click did something else, such as opening
+    /// a window), or when the menu stayed open past the limit.
+    private func watchPeek(ownerPID: pid_t, isSystem: Bool, pressed: TimeInterval, token: Int) {
+        peekSawMenu = false
+        let timer = Timer(timeInterval: Self.peekWatchInterval, repeats: true) { [weak self] timer in
+            guard let self, self.epoch == token else {
+                timer.invalidate()
+                return
+            }
+            let open = MenuBarPopupWatch.hasPopup(ownerPID: ownerPID, systemItem: isSystem)
+            let age = ProcessInfo.processInfo.systemUptime - pressed
+            self.peekSawMenu = self.peekSawMenu || open
+            let done = self.peekSawMenu ? !open : age >= Self.peekMenuGrace
+            guard done || age >= Self.peekLimit else { return }
+            Self.log.notice("peek ends, menu seen: \(self.peekSawMenu, privacy: .public), after \(age, privacy: .public) s")
+            self.endPeek()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        peekTimer = timer
+    }
+
+    /// Hides the peeked icon again with the set the bar collapsed with, then
+    /// shows `problem`, nil once all went well.
+    private func endPeek(problem: Problem? = nil) {
+        peekTimer?.invalidate()
+        peekTimer = nil
+        let restricted = activate(hiding: hidden, for: "peek end") { [weak self] failure in
+            guard let self else { return }
+            if let failure {
+                self.failOpen(.activationFailed(failure))
+                return
+            }
+            self.problem = problem
+        }
+        guard !restricted else { return }
+        expand()
+        if let problem { self.problem = problem }
+    }
+
+    /// The item's name for a problem line: the last walk, then what was
+    /// remembered, then its own title, as the editor names it.
+    private func peekName(_ identity: MenuBarItemIdentity) -> String {
+        inventory.first { $0.identity == identity }?.appName
+            ?? lastHidden.first { $0.identity == identity }?.appName
+            ?? identity.title
     }
 
     // MARK: - System events
@@ -572,7 +741,7 @@ final class MenuBarOrganizerService: ObservableObject {
         Self.log.notice("apply starts, was collapsed: \(wasCollapsed, privacy: .public), restricted: \(wasRestricted, privacy: .public)")
         release("apply")
         state = .applying
-        collapser.setCollapsed(false)
+        collapser.setCollapsed(false, shelfOpen: false)
         lastApplyReport = nil
 
         let order = target.hidden + [collapserIdentity] + target.visible
