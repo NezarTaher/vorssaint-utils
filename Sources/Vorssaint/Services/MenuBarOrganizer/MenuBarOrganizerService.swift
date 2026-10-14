@@ -254,13 +254,7 @@ final class MenuBarOrganizerService: ObservableObject {
             return
         }
         restrictExpanded()
-        scheduleAutoRehide()
-        // The icons return a moment after the restriction lifts.
-        let token = epoch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, self.epoch == token else { return }
-            self.refreshInventory()
-        }
+        restoreOrderAfterReveal(token: epoch, collapseAfterwards: false)
     }
 
     /// An expanded bar still keeps the never-shown apps out; without any the
@@ -339,7 +333,7 @@ final class MenuBarOrganizerService: ObservableObject {
     }
 
     private var canReadLayout: Bool {
-        state == .expanded || state == .off
+        (state == .expanded || state == .off) && awaitedLaunches.isEmpty
     }
 
     /// Collapses once three walks a second apart agree, so icons of login
@@ -460,9 +454,18 @@ final class MenuBarOrganizerService: ObservableObject {
         UserDefaults.standard.set(MenuBarHiddenRecord.encode(records), forKey: DefaultsKey.menuBarOrganizerNeverShown)
     }
 
+    /// A new delay starts now for an expanded bar; Never cancels the old
+    /// timer. Shelf peeks already end when their menu closes.
+    func refreshAutoRehide() {
+        rehideTimer?.invalidate()
+        rehideTimer = nil
+        if state == .expanded { scheduleAutoRehide() }
+    }
+
     private func scheduleAutoRehide() {
         let seconds = UserDefaults.standard.integer(forKey: DefaultsKey.menuBarOrganizerAutoRehideSeconds)
-        guard seconds > 0 else { return }
+        guard seconds > 0, reveal == .menuBar else { return }
+        Self.log.notice("auto re-hide in \(seconds, privacy: .public) seconds")
         let timer = Timer(timeInterval: TimeInterval(seconds), repeats: false) { [weak self] _ in
             self?.collapse()
         }
@@ -663,12 +666,7 @@ final class MenuBarOrganizerService: ObservableObject {
                 let missing = self.awaitedLaunches.subtracting(present).sorted()
                 Self.log.notice("launch reveal ends, expired: \(expired, privacy: .public), no icon from \(missing, privacy: .public)")
                 self.awaitedLaunches.removeAll()
-                if self.state == .collapsed {
-                    self.collapse(with: items)
-                } else {
-                    self.adopt(items)
-                    self.restrictExpanded()
-                }
+                self.restoreOrderAfterReveal(token: token, collapseAfterwards: self.state == .collapsed)
             }
         }
     }
@@ -719,13 +717,42 @@ final class MenuBarOrganizerService: ObservableObject {
 
     // MARK: - Reordering
 
+    /// The visibility assertion does not preserve placement on every macOS
+    /// version: a returning icon can land at the left end or across the
+    /// collapser. Restore the last unrestricted order before adopting a new
+    /// partition, otherwise showing icons would change which ones hide.
+    /// New icons retain the planner's usual position at the left end.
+    private func restoreOrderAfterReveal(token: Int, collapseAfterwards: Bool) {
+        let order = inventory.map(\.identity)
+        let cancellation = Cancellation()
+        applyCancellation = cancellation
+        state = .applying
+        Self.moverQueue.async { [weak self] in
+            let report = Self.reorder(to: order, afterReveal: true, cancellation: cancellation)
+            Self.log.notice("restore order: \(report.moved, privacy: .public) moved, \(report.failed, privacy: .public) failed")
+            DispatchQueue.main.async {
+                guard let self, self.epoch == token, self.state == .applying else { return }
+                self.applyCancellation = nil
+                if report.failed > 0 { self.lastApplyReport = report }
+                self.state = .expanded
+                if collapseAfterwards {
+                    self.walkAndCollapse(token: token)
+                } else {
+                    self.restrictExpanded()
+                    self.refreshInventory()
+                    self.scheduleAutoRehide()
+                }
+            }
+        }
+    }
+
     /// Stores the drawn never-shown list, drags the icons into the drawn
     /// order, then reports how many moves landed. Every icon is shown for the
     /// pass, because only an icon that is in the bar can be dragged, and the
     /// bar is restricted again afterwards. Never-shown icons are not part of
     /// the order; the planner leaves them at the left end. The system items
     /// macOS does not pin are dragged like any other icon.
-    func apply(_ target: MenuBarLayout) {
+    func apply(_ target: MenuBarLayout, collapseAfterApplying: Bool = false) {
         guard state == .expanded || state == .collapsed,
               let collapserIdentity = MenuBarOrganizerCollapser.identity else { return }
         guard AXIsProcessTrusted() else {
@@ -755,11 +782,12 @@ final class MenuBarOrganizerService: ObservableObject {
                 self.applyCancellation = nil
                 self.lastApplyReport = report
                 self.state = .expanded
-                if wasCollapsed {
+                if wasCollapsed || collapseAfterApplying {
                     self.walkAndCollapse(token: token)
                 } else {
                     self.restrictExpanded()
                     self.refreshInventory()
+                    self.scheduleAutoRehide()
                 }
             }
         }

@@ -16,6 +16,7 @@ import Security
 ///       AXWindow                         one per display
 ///         AXGroup                        the item's frame
 ///           AXButton pid=<app>           third-party item, owned by its app
+///           (or AXApplication on macOS 27.0; resolve its AXExtrasMenuBar item)
 ///         AXGroup
 ///           AXGroup pid=<MenuBarAgent>
 ///             AXMenuBarItem id=com.apple.menuextra.…    system item
@@ -79,8 +80,10 @@ enum MenuBarAccessibilityInventory {
         var items: [(item: MenuBarItemSnapshot, element: AXUIElement)] = []
         var taken = Set<MenuBarItemIdentity>()
         var hosts: [pid_t: Host?] = [:]
+        var appItems: [pid_t: [AXUIElement]] = [:]
         for (group, frame) in groups {
-            guard let described = describe(group, frame: frame, agentPID: agentPID, taken: taken, hosts: &hosts)
+            guard let described = describe(group, frame: frame, agentPID: agentPID, taken: taken,
+                                           hosts: &hosts, appItems: &appItems)
             else { continue }
             taken.insert(described.item.identity)
             items.append(described)
@@ -94,7 +97,8 @@ enum MenuBarAccessibilityInventory {
     /// press goes to.
     private static func describe(_ group: AXUIElement, frame: CGRect, agentPID: pid_t,
                                  taken: Set<MenuBarItemIdentity>,
-                                 hosts: inout [pid_t: Host?]) -> (item: MenuBarItemSnapshot, element: AXUIElement)? {
+                                 hosts: inout [pid_t: Host?],
+                                 appItems: inout [pid_t: [AXUIElement]]) -> (item: MenuBarItemSnapshot, element: AXUIElement)? {
         let leaves = children(of: group)
         // Usually an AXButton, but a custom status view can surface as static
         // text or an unknown role: whatever the agent does not own names its app.
@@ -102,13 +106,15 @@ enum MenuBarAccessibilityInventory {
             guard let pid = pid(of: leaf), pid != agentPID else { continue }
             if hosts[pid] == nil { hosts[pid] = .some(host(of: pid)) }
             guard let host = hosts[pid] ?? nil else { continue }
+            guard let element = statusElement(leaf, groupFrame: frame, ownerPID: pid, appItems: &appItems)
+            else { continue }
             // Not the title: apps rewrite it, and the identity must not change.
             let identity = MenuBarItemIdentity.make(
-                bundleID: host.bundleID, identifier: string(leaf, kAXIdentifierAttribute),
-                description: string(leaf, kAXDescriptionAttribute), taken: taken)
+                bundleID: host.bundleID, identifier: string(element, kAXIdentifierAttribute),
+                description: string(element, kAXDescriptionAttribute), taken: taken)
             return (MenuBarItemSnapshot(identity: identity, frame: frame, pid: pid,
                                         appName: host.name, hostIsBundleless: host.isBundleless,
-                                        hostIsAppleSigned: host.isAppleSigned), leaf)
+                                        hostIsAppleSigned: host.isAppleSigned), element)
         }
         for leaf in leaves where role(of: leaf) == kAXGroupRole {
             for extra in children(of: leaf) where role(of: extra) == kAXMenuBarItemRole {
@@ -122,6 +128,24 @@ enum MenuBarAccessibilityInventory {
             }
         }
         return nil
+    }
+
+    /// macOS 27.0 puts the owning application inside an agent group rather
+    /// than the status control itself. Its extras bar contains every icon of
+    /// that app, so choose the unique control centered inside this group.
+    /// Keep the agent's frame for layout; return the real control for AXPress.
+    private static func statusElement(_ leaf: AXUIElement, groupFrame: CGRect, ownerPID: pid_t,
+                                      appItems: inout [pid_t: [AXUIElement]]) -> AXUIElement? {
+        guard role(of: leaf) == kAXApplicationRole else { return leaf }
+        if appItems[ownerPID] == nil {
+            appItems[ownerPID] = elementAttribute(leaf, "AXExtrasMenuBar").map { children(of: $0) } ?? []
+        }
+        let matches = appItems[ownerPID, default: []].filter { element in
+            guard let frame = frame(of: element), frame.width > 0, frame.height > 0 else { return false }
+            return groupFrame.contains(CGPoint(x: frame.midX, y: frame.midY))
+        }
+        guard matches.count == 1 else { return nil }
+        return matches[0]
     }
 
     // MARK: - Host attribution
@@ -207,6 +231,11 @@ enum MenuBarAccessibilityInventory {
 
     private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
         value(element, attribute) as? String
+    }
+
+    private static func elementAttribute(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+        guard let value = value(element, attribute), CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return unsafeDowncast(value, to: AXUIElement.self)
     }
 
     private static func role(of element: AXUIElement) -> String? {
