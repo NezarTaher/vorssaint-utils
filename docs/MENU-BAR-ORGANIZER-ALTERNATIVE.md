@@ -31,6 +31,8 @@ macOS 14–26 uses off-screen dividers. A crowded/notched bar may still leave a 
 
 The tests cover section rules, omitted accessory owners, changed AX identities, cache replacement, process isolation, ambiguous matches, hit-test boundaries, shelf geometry, locale coverage, feature availability, permission demand, portable preferences, failed-activation recovery, clock suspension/restoration, cancellation, and display-coordinate conversion. They do not synthesize desktop input.
 
+On 2026-10-14, after synchronizing with upstream `main` at `1a16004cbb5253829ef695afa333825f5d99d1bb`, the organizer suite passed all 120 checks. The full suite had one failure out of 116,262 checks: the unchanged countdown-row height assertion described below. Preference cleanup, uninstall-Spaces, and developer-install isolation checks passed.
+
 Earlier live testing of the combined development build on macOS 27.0.1 verified Tuxera and Amphetamine menus and the NeatDownloadManager window, with five hidden icons retained without duplicates. These checks preceded the final standalone feature-hub integration and upstream rebase.
 
 On the local macOS 27.0.1 test host, the unchanged `NotchCompactTests.swift:218` countdown-row height assertion failed in the organizer full suite and isolated notch suite. The same isolated failure reproduced from a clean source archive of upstream `main` at `fe24c1766d568b132c1c78c554cc422381a3a17d`. It is recorded as an upstream/environment baseline failure; the assertion and notch implementation are unchanged in this contribution.
