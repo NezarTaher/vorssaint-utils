@@ -52,7 +52,8 @@ def main():
           + "".join(declaration("Sources/Vorssaint/App/MenuBarOrganizerService.swift", prefix)
                     .replace("private func", "func", 1) for prefix in [
                         "    private func synchronizeVisibility(", "    private func completeRefresh(",
-                        "    private func clockHoverChanged("])
+                        "    private func clockHoverChanged(", "    private func toggleHiddenBar(",
+                        "    private func presentHiddenBar("])
           + "}\n}\n")
     write("SwitcherFullscreenScope.swift", "import AppKit\nimport ApplicationServices\nimport CoreGraphics\n"
           + "extension SwitcherFullscreenScopeTests.Enumerator {\n"

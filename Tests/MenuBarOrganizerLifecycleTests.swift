@@ -7,15 +7,31 @@ import AppKit
 /// real menu bar, Accessibility permissions, or the user's saved preferences.
 enum MenuBarOrganizerLifecycleTests {
     final class MenuBarNativeVisibility {
-        enum Failure: Error { case activation }
+        enum Failure: Error { case activation, applicationLocation }
         var error: Error?
+        var deferred = false
+        var completion: ((Error?) -> Void)?
         var plans: [Set<String>] = []
         var releases = 0
         func release() { releases += 1 }
         func apply(hiddenBundles: Set<String>, menuBarOwners: [NSRunningApplication],
                    completion: @escaping (Error?) -> Void) {
             plans.append(hiddenBundles)
-            completion(error)
+            if deferred { self.completion = completion }
+            else { completion(error) }
+        }
+    }
+    struct Item: Equatable { let id: String; let bundleID: String }
+    final class StatusItem { var button: Int? = 1 }
+    final class HiddenBar {
+        var items: [Item] = []
+        var message: String?
+        var presentations = 0
+        func show(items: [Item], anchor: Int?, message: String?, needsAccessibility: Bool,
+                  activate: @escaping (Item) -> Void, menu: (Item) -> NSMenu) {
+            self.items = items
+            self.message = message
+            presentations += 1
         }
     }
     final class DispatchWorkItem {
@@ -39,7 +55,7 @@ enum MenuBarOrganizerLifecycleTests {
     }
     class Fixture {
         var isEnabled = true
-        var toggleItem: Int? = 1
+        var toggleItem: StatusItem? = StatusItem()
         var usesNativeVisibility = true
         var accessibilityAvailable = true
         var visibility = MenuBarOrganizerVisibility()
@@ -53,11 +69,57 @@ enum MenuBarOrganizerLifecycleTests {
         var temporaryBundle: String?
         let nativeVisibility = MenuBarNativeVisibility()
         var applications: [NSRunningApplication] = []
+        var presentedSection: MenuBarOrganizerSection?
+        var items = [Item(id: "hidden-icon", bundleID: "hidden"), Item(id: "always-icon", bundleID: "always")]
+        var legacySections: [String: MenuBarOrganizerSection] = [:]
+        var lastAnchor: Int?
+        let hiddenBar = HiddenBar()
+        var failureMessage: String { "Visibility failed: \(String(describing: failure))" }
+        func section(for bundle: String) -> MenuBarOrganizerSection { rules.section(for: bundle) }
+        func cancelActivation(restoringLegacyState: Bool) {}
+        func closeHiddenBar() { presentedSection = nil }
+        func refreshApplications(completion: (() -> Void)? = nil) { completion?() }
+        func activateItem(_ item: Item) {}
+        func itemMenu(_ item: Item) -> NSMenu { NSMenu() }
         func updateSections() {}
         init() { requestedVisibility.toggleHidden() }
     }
 
     static func run(_ suite: TestSuite) {
+        do {
+            let host = Host()
+            host.nativeVisibility.deferred = true
+            host.toggleHiddenBar(section: .hidden)
+            suite.expect(host.hiddenBar.presentations == 0,
+                         "opening the shelf waits for the system visibility result before presenting hidden icons")
+            host.nativeVisibility.completion?(MenuBarNativeVisibility.Failure.applicationLocation)
+            suite.expect(host.hiddenBar.items.isEmpty && host.hiddenBar.message == host.failureMessage,
+                         "a staged app with a different registered copy explains the location failure instead of duplicating visible icons")
+            host.nativeVisibility.deferred = false
+            host.completeRefresh(permissionChanged: false)
+            suite.expect(host.hiddenBar.items.map(\.bundleID) == ["hidden"] && host.hiddenBar.message == nil,
+                         "an open failed shelf refreshes automatically once the restriction recovers")
+        }
+        do {
+            let host = Host()
+            host.nativeVisibility.deferred = true
+            host.toggleHiddenBar(section: .hidden)
+            host.closeHiddenBar()
+            host.nativeVisibility.completion?(nil)
+            suite.expect(host.hiddenBar.presentations == 0,
+                         "a late visibility callback does not reopen a dismissed shelf")
+        }
+        do {
+            let host = Host()
+            host.accessibilityAvailable = false
+            host.toggleHiddenBar(section: .hidden)
+            suite.expect(host.hiddenBar.items.isEmpty && host.hiddenBar.message != nil,
+                         "missing Accessibility shows recovery guidance instead of claiming visible icons are hidden")
+            host.accessibilityAvailable = true
+            host.toggleHiddenBar(section: .alwaysHidden)
+            suite.expect(host.hiddenBar.items.map(\.bundleID) == ["hidden", "always"],
+                         "successful Option reveal still presents both hidden sections")
+        }
         do {
             let host = Host()
             host.nativeVisibility.error = MenuBarNativeVisibility.Failure.activation

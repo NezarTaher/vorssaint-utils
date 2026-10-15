@@ -225,6 +225,7 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
     private func synchronizeVisibility(completion: ((Bool) -> Void)? = nil) {
         guard isEnabled, toggleItem != nil else { completion?(false); return }
         let target = requestedVisibility
+        let previousFailure = failure
         failure = nil
         guard usesNativeVisibility else {
             visibility = target
@@ -267,6 +268,7 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
                 self.visibility = target
             }
             self.updateSections()
+            if self.presentedSection != nil, previousFailure != self.failure { self.presentHiddenBar() }
             completion?(error == nil)
         }
     }
@@ -309,15 +311,20 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
         presentedSection = section
         refreshApplications { [weak self] in
             guard let self, self.presentedSection == section else { return }
-            self.synchronizeVisibility()
-            self.presentHiddenBar()
+            self.synchronizeVisibility { [weak self] _ in
+                guard let self, self.presentedSection == section else { return }
+                self.presentHiddenBar()
+            }
         }
     }
 
     private func presentHiddenBar(message: String? = nil) {
         guard let presentedSection, isEnabled else { return }
         let text = MenuBarOrganizerStrings.localized(L10n.shared.language)
-        let selected = items.filter { item in
+        // Rules describe the intended section, not proof that macOS hid it.
+        // A failed restriction must explain the problem instead of duplicating
+        // still-visible icons in a shelf labelled as hidden.
+        let selected = failure == nil && accessibilityAvailable ? items.filter { item in
             if usesNativeVisibility {
                 let section = section(for: item.bundleID)
                 return section == .hidden || (presentedSection == .alwaysHidden && section == .alwaysHidden)
@@ -326,9 +333,9 @@ final class MenuBarOrganizerService: NSObject, ObservableObject, NSMenuDelegate 
             // boundaries. Use cached positions from before they were folded.
             let section = legacySections[item.id] ?? .visible
             return section == .hidden || (presentedSection == .alwaysHidden && section == .alwaysHidden)
-        }
+        } : []
         hiddenBar.show(items: selected, anchor: lastAnchor ?? toggleItem?.button,
-            message: accessibilityAvailable ? message : text.accessibilityNeeded,
+            message: accessibilityAvailable ? (message ?? (failure == nil ? nil : failureMessage)) : text.accessibilityNeeded,
             needsAccessibility: !accessibilityAvailable,
             activate: { [weak self] in self?.activateItem($0) }, menu: { [weak self] item in
                 self?.itemMenu(item) ?? NSMenu()
