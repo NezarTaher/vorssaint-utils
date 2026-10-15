@@ -172,6 +172,11 @@ struct MenuBarOrganizerShelfView: View {
     private var strings: MenuBarOrganizerFeatureStrings { FeatureStrings.menuBarOrganizer(l10n.language) }
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         let entries = service.lastHidden.map(\.identity)
         let presentation = MenuBarOrganizerItemPresentation(inventory: service.inventory,
                                                             lastHidden: service.lastHidden,

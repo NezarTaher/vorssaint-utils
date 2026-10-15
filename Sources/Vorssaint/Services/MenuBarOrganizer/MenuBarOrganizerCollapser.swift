@@ -41,6 +41,9 @@ final class MenuBarOrganizerCollapser: NSObject {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.setAccessibilityIdentifier(Self.accessibilityName)
             button.setAccessibilityTitle(Self.accessibilityName)
+            // The hidden icons sit left of the collapser on every Mac, so the
+            // chevron must not mirror under a right-to-left system language.
+            button.userInterfaceLayoutDirection = .leftToRight
         }
         setCollapsed(collapsed, shelfOpen: false)
     }
