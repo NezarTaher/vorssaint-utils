@@ -16,8 +16,8 @@ enum ClipboardHistoryMoveDirection {
 }
 
 /// Opt-in clipboard history. It records plain text and, optionally, copied
-/// images and files; keeps a small local history and avoids obvious
-/// secret-looking strings by default.
+/// images and files; keeps a small local history. Confidential pasteboard
+/// content is excluded; guessing sensitive text is a separate opt-in.
 final class ClipboardHistoryService: ObservableObject {
     static let shared = ClipboardHistoryService()
 
@@ -909,7 +909,7 @@ final class ClipboardHistoryService: ObservableObject {
     private func promote(_ raw: String, source: String?, keepsSource: Bool) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text.count <= ClipboardHistoryEditing.maxCharacters else { return }
-        if UserDefaults.standard.bool(forKey: DefaultsKey.clipboardHistorySkipSensitive),
+        if UserDefaults.standard.bool(forKey: DefaultsKey.clipboardHistoryFilterSensitiveText),
            looksSensitive(text) {
             return
         }
@@ -1482,7 +1482,8 @@ final class ClipboardHistoryService: ObservableObject {
                 return nil
             }
             if let step = ClipboardHistoryNavigation.step(keyCode: event.keyCode, modifiers: modifiers,
-                                                          key: key, layout: self.quickLayout) {
+                                                          key: key, layout: self.quickLayout,
+                                                          rightToLeft: L10n.shared.language.isRightToLeft) {
                 self.moveQuickSelection(step)
                 return nil
             }

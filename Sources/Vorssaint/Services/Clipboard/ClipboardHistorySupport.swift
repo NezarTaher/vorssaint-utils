@@ -813,18 +813,18 @@ enum ClipboardHistoryPreview {
 enum ClipboardHistoryNavigation {
     /// How far a key moves the highlight, or nil when it is not a move.
     /// Down and Control-N go forward and up and Control-P back in both
-    /// layouts. The cards run left to right, so a plain side arrow walks
+    /// layouts. A plain side arrow follows the cards' visual direction,
     /// them too; with a modifier, or in the list, it stays with the search
     /// field's caret.
     static func step(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, key: String?,
-                     layout: ClipboardHistoryLayout) -> Int? {
+                     layout: ClipboardHistoryLayout, rightToLeft: Bool = false) -> Int? {
         let sideArrowsMove = modifiers.isEmpty && layout.sideArrowsMoveSelection
-        if keyCode == UInt16(kVK_DownArrow) || (modifiers == [.control] && key == "n")
-            || (sideArrowsMove && keyCode == UInt16(kVK_RightArrow)) {
+        if sideArrowsMove && keyCode == UInt16(kVK_RightArrow) { return rightToLeft ? -1 : 1 }
+        if sideArrowsMove && keyCode == UInt16(kVK_LeftArrow) { return rightToLeft ? 1 : -1 }
+        if keyCode == UInt16(kVK_DownArrow) || (modifiers == [.control] && key == "n") {
             return 1
         }
-        if keyCode == UInt16(kVK_UpArrow) || (modifiers == [.control] && key == "p")
-            || (sideArrowsMove && keyCode == UInt16(kVK_LeftArrow)) {
+        if keyCode == UInt16(kVK_UpArrow) || (modifiers == [.control] && key == "p") {
             return -1
         }
         return nil
@@ -1047,10 +1047,22 @@ enum ClipboardHistorySensitiveText {
         types.contains(concealedPasteboardType)
     }
 
+    // A mention of "token" in a command, error or source code is not a
+    // credential. Require a named field with a nonempty value, including
+    // environment variables, quoted JSON keys, Authorization headers and
+    // explicit command-line options such as --password VALUE.
+    // Horizontal whitespace keeps an empty assignment from consuming the
+    // next line of terminal output. Compile once for repeated clipboard reads.
+    private static let credentialName = #"(?:password|passwd|secret|token|api[_-]?key|authorization)"#
+    private static let credentialAssignment = try? NSRegularExpression(
+        pattern: #"(?<![\w-])(?:[\w-]*\#(credentialName)["']?[ \t]*[:=][ \t]*|--[\w-]*\#(credentialName)[ \t]+)["']?[^\s"'`,;{}\[\]]"#,
+        options: [.caseInsensitive]
+    )
+
     static func looksSensitive(_ text: String) -> Bool {
-        let lowered = text.lowercased()
-        let obviousWords = ["password", "passwd", "secret", "token", "apikey", "api_key", "authorization"]
-        if obviousWords.contains(where: lowered.contains) { return true }
+        if credentialAssignment?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
+            return true
+        }
         if isWebURL(text) { return false }
         // An identifier code is nobody's secret, and it fits the shape below
         // exactly: long, unbroken, letters and digits with dashes between

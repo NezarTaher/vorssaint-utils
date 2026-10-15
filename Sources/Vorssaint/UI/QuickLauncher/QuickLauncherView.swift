@@ -29,6 +29,11 @@ struct QuickLauncherView: View {
     }
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             // In the notch the surrounding chrome already titles the panel and
             // offers the customize toggle, so the launcher's own header would
@@ -83,6 +88,7 @@ struct QuickLauncherView: View {
         .onChange(of: colorFormat) { _, _ in
             launcher.refreshPanelLayout()
         }
+
     }
 
     /// The utility runs right here inside the launcher; its own close button

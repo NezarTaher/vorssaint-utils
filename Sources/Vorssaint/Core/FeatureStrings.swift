@@ -6,6 +6,7 @@ import Foundation
 enum FeatureStrings {
     static func settingsCategories(_ language: AppLanguage) -> SettingsCategoryStrings {
         switch language {
+        case .ar: return .ar
         case .enUS: return .enUS
         case .ptBR: return .ptBR
         case .tr: return .tr
@@ -26,6 +27,7 @@ enum FeatureStrings {
 
     static func clipboard(_ language: AppLanguage) -> ClipboardFeatureStrings {
         switch language {
+        case .ar: return .ar
         case .enUS: return .enUS
         case .ptBR: return .ptBR
         case .tr: return .tr
@@ -46,6 +48,7 @@ enum FeatureStrings {
 
     static func windowLayout(_ language: AppLanguage) -> WindowLayoutFeatureStrings {
         switch language {
+        case .ar: return .ar
         case .enUS: return .enUS
         case .ptBR: return .ptBR
         case .tr: return .tr
@@ -66,6 +69,7 @@ enum FeatureStrings {
 
     static func monitorAlerts(_ language: AppLanguage) -> MonitorAlertFeatureStrings {
         switch language {
+        case .ar: return .ar
         case .enUS: return .enUS
         case .ptBR: return .ptBR
         case .tr: return .tr
@@ -86,6 +90,7 @@ enum FeatureStrings {
 
     static func mixer(_ language: AppLanguage) -> MixerFeatureStrings {
         switch language {
+        case .ar: return .ar
         case .enUS: return .enUS
         case .ptBR: return .ptBR
         case .tr: return .tr
@@ -156,7 +161,7 @@ extension ClipboardFeatureStrings {
         caption: "복사한 텍스트를 저장하여 나중에 다시 사용할 수 있습니다. 모든 항목은 로컬에 보관되며 언제든 지울 수 있습니다.",
         localNote: "모든 항목은 이 Mac에만 저장됩니다. 너무 큰 항목은 무시됩니다.",
         skipSensitive: "민감해 보이는 텍스트 건너뛰기",
-        skipSensitiveCaption: "암호, 토큰, 키처럼 보이는 짧고 공백 없는 문자열을 저장하지 않습니다.",
+        skipSensitiveCaption: "암호나 토큰처럼 보이는 일반 텍스트도 건너뛸 수 있습니다. 원본 앱이 기밀로 표시한 콘텐츠는 항상 제외됩니다.",
         limit: "제한",
         limitUnlimited: "무제한",
         showInPanel: "패널에 표시",
@@ -544,7 +549,7 @@ struct ClipboardFeatureStrings {
         caption: "Stores copied text so you can reuse it later. Everything stays local and can be cleared anytime.",
         localNote: "Everything stays on this Mac. Very large items are ignored.",
         skipSensitive: "Skip text that looks sensitive",
-        skipSensitiveCaption: "Avoids saving short no-space strings that look like passwords, tokens or keys.",
+        skipSensitiveCaption: "May skip ordinary text that resembles passwords or tokens. Content marked as confidential by its source app is always excluded.",
         limit: "Limit",
         limitUnlimited: "Unlimited",
         showInPanel: "Show in panel",
@@ -609,7 +614,7 @@ struct ClipboardFeatureStrings {
         caption: "Guarda textos copiados para reutilizar depois. Tudo fica local e pode ser apagado a qualquer momento.",
         localNote: "Tudo fica neste Mac. Itens muito grandes são ignorados.",
         skipSensitive: "Ignorar textos com aparência sensível",
-        skipSensitiveCaption: "Evita salvar textos curtos sem espaços que parecem senha, token ou chave.",
+        skipSensitiveCaption: "Pode ignorar textos comuns que pareçam senhas ou tokens. Conteúdo marcado como confidencial pelo aplicativo de origem nunca é salvo.",
         limit: "Limite",
         limitUnlimited: "Ilimitado",
         showInPanel: "Mostrar no painel",
@@ -674,7 +679,7 @@ struct ClipboardFeatureStrings {
         caption: "Kopyalanan metinleri daha sonra yeniden kullanabilmen için saklar. Her şey yerel kalır ve istediğin zaman temizlenebilir.",
         localNote: "Her şey bu Mac’te kalır. Çok büyük öğeler yok sayılır.",
         skipSensitive: "Hassas görünen metinleri atla",
-        skipSensitiveCaption: "Parola, token veya anahtar gibi görünen kısa ve boşluksuz dizeleri kaydetmekten kaçınır.",
+        skipSensitiveCaption: "Parola veya token gibi görünen normal metinleri de atlayabilir. Kaynak uygulamanın gizli olarak işaretlediği içerik her zaman hariç tutulur.",
         limit: "Sınır",
         limitUnlimited: "Sınırsız",
         showInPanel: "Panelde göster",
@@ -739,7 +744,7 @@ struct ClipboardFeatureStrings {
         caption: "Сохраняет скопированный текст, чтобы вы могли использовать его позже. Всё остаётся локально и может быть очищено в любой момент.",
         localNote: "Всё остаётся на этом Mac. Слишком большие элементы игнорируются.",
         skipSensitive: "Пропускать текст, похожий на конфиденциальный",
-        skipSensitiveCaption: "Не сохраняет короткие строки без пробелов, похожие на пароли, токены или ключи.",
+        skipSensitiveCaption: "Может пропускать обычный текст, похожий на пароли или токены. Содержимое, отмеченное исходным приложением как конфиденциальное, всегда исключается.",
         limit: "Лимит",
         limitUnlimited: "Без ограничений",
         showInPanel: "Показывать в панели",
@@ -804,7 +809,7 @@ struct ClipboardFeatureStrings {
         caption: "Guarda el texto copiado para reutilizarlo después. Todo queda local y se puede borrar cuando quieras.",
         localNote: "Todo se queda en este Mac. Los elementos muy grandes se ignoran.",
         skipSensitive: "Omitir texto que parezca sensible",
-        skipSensitiveCaption: "Evita guardar cadenas cortas sin espacios que parezcan contraseñas, tokens o claves.",
+        skipSensitiveCaption: "Puede omitir texto normal que parezca una contraseña o un token. El contenido marcado como confidencial por la app de origen siempre se excluye.",
         limit: "Límite",
         limitUnlimited: "Ilimitado",
         showInPanel: "Mostrar en el panel",
@@ -869,7 +874,7 @@ struct ClipboardFeatureStrings {
         caption: "Ukladá skopírovaný text, aby ste ho mohli neskôr znova použiť. Všetko zostáva lokálne a môžete to kedykoľvek vymazať.",
         localNote: "Všetko zostáva len na tomto Macu. Príliš veľké položky sa ignorujú.",
         skipSensitive: "Preskočiť text, ktorý vyzerá citlivo",
-        skipSensitiveCaption: "Zabráni uloženiu krátkych reťazcov bez medzier, ktoré vyzerajú ako heslá, tokeny alebo kľúče.",
+        skipSensitiveCaption: "Môže preskočiť aj bežný text, ktorý pripomína heslá alebo tokeny. Obsah označený zdrojovou aplikáciou ako dôverný sa vždy vylúči.",
         limit: "Limit",
         limitUnlimited: "Bez obmedzenia",
         showInPanel: "Zobraziť v paneli",
@@ -934,7 +939,7 @@ struct ClipboardFeatureStrings {
         caption: "Speichert kopierten Text, damit du ihn später wiederverwenden kannst. Alles bleibt lokal und kann jederzeit gelöscht werden.",
         localNote: "Alles bleibt auf diesem Mac. Sehr große Inhalte werden ignoriert.",
         skipSensitive: "Text überspringen, der sensibel wirkt",
-        skipSensitiveCaption: "Speichert keine kurzen Zeichenfolgen ohne Leerzeichen, die wie Passwörter, Token oder Schlüssel wirken.",
+        skipSensitiveCaption: "Kann auch normalen Text überspringen, der wie Passwörter oder Tokens aussieht. Von der Quell-App als vertraulich markierte Inhalte werden immer ausgeschlossen.",
         limit: "Limit",
         limitUnlimited: "Unbegrenzt",
         showInPanel: "Im Panel anzeigen",
@@ -999,7 +1004,7 @@ struct ClipboardFeatureStrings {
         caption: "Enregistre le texte copié pour le réutiliser plus tard. Tout reste local et peut être effacé à tout moment.",
         localNote: "Tout reste sur ce Mac. Les éléments très volumineux sont ignorés.",
         skipSensitive: "Ignorer le texte qui semble sensible",
-        skipSensitiveCaption: "Évite d’enregistrer les courtes chaînes sans espaces qui ressemblent à des mots de passe, jetons ou clés.",
+        skipSensitiveCaption: "Peut ignorer du texte ordinaire ressemblant à des mots de passe ou à des jetons. Le contenu marqué comme confidentiel par l’app source est toujours exclu.",
         limit: "Limite",
         limitUnlimited: "Illimité",
         showInPanel: "Afficher dans le panneau",
@@ -1064,7 +1069,7 @@ struct ClipboardFeatureStrings {
         caption: "Salva il testo copiato per riutilizzarlo in seguito. Tutto resta locale e può essere cancellato in qualsiasi momento.",
         localNote: "Tutto resta su questo Mac. Gli elementi molto grandi vengono ignorati.",
         skipSensitive: "Ignora testo che sembra sensibile",
-        skipSensitiveCaption: "Evita di salvare stringhe brevi senza spazi che sembrano password, token o chiavi.",
+        skipSensitiveCaption: "Può ignorare anche testo normale che sembra una password o un token. I contenuti contrassegnati come riservati dall’app di origine vengono sempre esclusi.",
         limit: "Limite",
         limitUnlimited: "Illimitato",
         showInPanel: "Mostra nel pannello",
@@ -1129,7 +1134,7 @@ struct ClipboardFeatureStrings {
         caption: "コピーしたテキストを保存して、あとで再利用できます。すべてローカルに保存され、いつでも削除できます。",
         localNote: "すべてこのMacに残ります。大きすぎる項目は無視されます。",
         skipSensitive: "機密らしいテキストを無視",
-        skipSensitiveCaption: "パスワード、トークン、キーに見える短い空白なしの文字列を保存しません。",
+        skipSensitiveCaption: "パスワードやトークンに似た通常のテキストも除外される場合があります。コピー元のアプリが機密として指定した内容は常に除外されます。",
         limit: "上限",
         limitUnlimited: "無制限",
         showInPanel: "パネルに表示",
@@ -1194,7 +1199,7 @@ struct ClipboardFeatureStrings {
         caption: "保存拷贝过的文本，方便之后再次使用。所有内容都保存在本机，可随时清除。",
         localNote: "一切都保留在这台 Mac 上。特别大的内容会被忽略。",
         skipSensitive: "跳过疑似敏感文本",
-        skipSensitiveCaption: "避免保存像密码、令牌或密钥的短文本。",
+        skipSensitiveCaption: "可能会跳过看起来像密码或令牌的普通文本。来源应用标记为机密的内容始终不会保存。",
         limit: "数量上限",
         limitUnlimited: "无限制",
         showInPanel: "在面板中显示",
@@ -1259,7 +1264,7 @@ struct ClipboardFeatureStrings {
         caption: "儲存複製過的文字，方便之後再次使用。所有內容都會儲存在這台裝置上，並可隨時清除。",
         localNote: "一切都保留在這台 Mac 上。過大的內容會被略過。",
         skipSensitive: "略過可能含有敏感資料的文字",
-        skipSensitiveCaption: "避免儲存像是密碼、權杖或金鑰這類較短的文字。",
+        skipSensitiveCaption: "可能會略過看起來像密碼或權杖的一般文字。來源 App 標記為機密的內容一律不會儲存。",
         limit: "數量上限",
         limitUnlimited: "無限制",
         showInPanel: "在面板中顯示",
@@ -1324,7 +1329,7 @@ struct ClipboardFeatureStrings {
         caption: "儲存複製過的文字，方便之後再次使用。所有內容都會儲存在此裝置上，並可隨時清除。",
         localNote: "一切都保留在這部 Mac 上。過大的內容會被略過。",
         skipSensitive: "略過可能含有敏感資料的文字",
-        skipSensitiveCaption: "避免儲存密碼、權杖或密鑰等較短文字。",
+        skipSensitiveCaption: "可能會略過看起來像密碼或權杖的一般文字。來源 App 標記為機密的內容一律不會儲存。",
         limit: "數量上限",
         limitUnlimited: "無限制",
         showInPanel: "在面板中顯示",
@@ -3194,7 +3199,7 @@ extension ClipboardFeatureStrings {
         caption: "Зберігає скопійований текст, щоб ви могли використати його пізніше. Все залишається локальним і може бути очищене будь-коли.",
         localNote: "Все залишається на цьому Mac. Дуже великі елементи ігноруються.",
         skipSensitive: "Пропускати текст, схожий на конфіденційний",
-        skipSensitiveCaption: "Уникає збереження коротких рядків без пробілів, схожих на паролі, токени або ключі.",
+        skipSensitiveCaption: "Може пропускати звичайний текст, схожий на паролі або токени. Вміст, позначений вихідною програмою як конфіденційний, завжди виключається.",
         limit: "Ліміт",
         limitUnlimited: "Без обмежень",
         showInPanel: "Показати в панелі",
@@ -3398,5 +3403,219 @@ extension MixerFeatureStrings {
         moveRight: "Перемістити праворуч",
         arrange: "Утримуйте Command і перетягуйте, щоб змінити порядок",
         actions: "Дії"
+    )
+}
+
+extension MixerFeatureStrings {
+    static let ar = MixerFeatureStrings(hideInactiveApps: "إخفاء التطبيقات غير النشطة", pin: "تثبيت في الأعلى", unpin: "إلغاء التثبيت", moveUp: "نقل لأعلى", moveDown: "نقل لأسفل", pinFirst: "تثبيت في المقدمة", moveLeft: "نقل لليسار", moveRight: "نقل لليمين", arrange: "اضغط Command واسحب لإعادة الترتيب", actions: "الإجراءات")
+}
+
+extension SettingsCategoryStrings {
+    static let ar = SettingsCategoryStrings(
+        essentials: "الأساسيات",
+        windowsControls: "عناصر التحكم بالنوافذ",
+        files: "الملفات",
+        utilities: "الأدوات المساعدة",
+        app: "التطبيق",
+        appManagement: "إدارة التطبيقات"
+    )
+}
+
+extension ClipboardFeatureStrings {
+    static let ar = ClipboardFeatureStrings(
+        title: "الحافظة",
+        enable: "حفظ سجل الحافظة",
+        caption: "يحفظ النص المنسوخ لإعادة استخدامه لاحقًا. يبقى كل شيء محليًا ويمكن مسحه في أي وقت.",
+        localNote: "يبقى كل شيء على هذا الـMac. تُتجاهل العناصر الكبيرة جدًا.",
+        skipSensitive: "تخطي النصوص التي تبدو حساسة",
+        skipSensitiveCaption: "قد يتخطى نصوصًا عادية تشبه كلمات المرور أو رموز الوصول. يُستثنى دائمًا المحتوى الذي يصنّفه التطبيق المصدر على أنه سري.",
+        limit: "الحد",
+        limitUnlimited: "بلا حد",
+        showInPanel: "إظهار في اللوحة",
+        shortcut: "اختصار السجل",
+        shortcutCaption: "يفتح نافذة سريعة للبحث والعناصر المثبتة واختصارات ⌘1 إلى ⌘9 للصق في التطبيق السابق.",
+        shortcutHint: "انقر صفًا للصقه في التطبيق السابق. ⌘ مع النقر يحدد عدة عناصر؛ ⌘C ينسخ دون لصق.",
+        clickRowShortcut: "نقر الصف",
+        commandClickShortcut: "⌘ مع النقر",
+        pinned: "المثبتة",
+        recent: "الأخيرة",
+        pin: "تثبيت",
+        unpin: "إلغاء التثبيت",
+        clearRecent: "مسح غير المثبتة",
+        clearRecentKeywords: "مسح الأخيرة",
+        empty: "لا توجد نصوص محفوظة",
+        disabled: "فعّل السجل لبدء حفظ النص المنسوخ.",
+        search: "البحث في النص المنسوخ",
+        copy: "نسخ",
+        copied: "تم النسخ",
+        delete: "حذف العنصر",
+        selectMultiple: "إضافة إلى المجموعة",
+        unselectMultiple: "إزالة من المجموعة",
+        selectShortcutAction: "تحديد",
+        pasteSelectedFormat: "لصق %d",
+        copySelectedFormat: "نسخ %d",
+        clearSelection: "مسح التحديد",
+        moveUp: "نقل لأعلى",
+        moveDown: "نقل لأسفل",
+        noResults: "لا توجد نتائج",
+        active: "حفظ النص الجديد",
+        includeImagesFiles: "حفظ الصور والملفات المنسوخة أيضًا",
+        includeImagesFilesCaption: "تُضاف الصور إلى السجل وتُحفظ الملفات كروابط إلى مواقعها. ثبّتها والصقها كأي عنصر نصي.",
+        imageEntryLabel: "صورة",
+        fileCountFormat: "عدد الملفات: %d",
+        pasteImageAsFile: "لصق الصور المنسوخة كملفات",
+        pasteImageAsFileCaption: "عندما يكون Finder نشطًا، يحفظ ⌘V الصورة المنسوخة بصيغة PNG في المجلد الحالي.",
+        previewLabel: "معاينة",
+        edit: "تحرير",
+        cancel: "إلغاء",
+        save: "حفظ",
+        autoClearEnable: "مسح الحافظة تلقائيًا بعد",
+        autoClearSecondsSuffix: "ثانية",
+        autoClearOnSleep: "مسح الحافظة عند سكون الكمبيوتر",
+        autoClearOnDisplaySleep: "مسح الحافظة عند سكون الشاشة",
+        autoClearOnScreenLock: "مسح الحافظة عند قفل الشاشة",
+        autoClearCaption: "يمسح حافظة النظام فقط. تبقى العناصر المحفوظة في السجل.",
+        deleteSelectedFormat: "حذف %d",
+        menuBarPreview: "إظهار آخر نسخة في شريط القوائم",
+        menuBarPreviewCaption: "يعرض معاينة مختصرة لآخر عنصر نسخته بجانب الأيقونة. انقرها لفتح السجل.",
+        menuBarPreviewLength: "طول المعاينة",
+        menuBarPreviewLengthSuffix: "حرف",
+        clearRecentConfirmFormat: "مسح العناصر غير المثبتة (%d)؟",
+        clearRecentConfirmMessage: "تبقى العناصر المثبتة وما يُنسخ بعد ذلك. لا يمكن التراجع عن هذا الإجراء.",
+        historyLayout: "تخطيط السجل",
+        historyLayoutCards: "بطاقات",
+        historyLayoutList: "قائمة"
+    )
+}
+
+extension WindowLayoutFeatureStrings {
+    static let ar = WindowLayoutFeatureStrings(
+        title: "تخطيط النوافذ",
+        caption: "ترتيب النوافذ في أقسام الشاشة أو تحريكها وتغيير حجمها بالماوس أو لوحة التعقب.",
+        showInPanel: "إظهار في اللوحة",
+        gestureSection: "سحب النوافذ",
+        gestureEnable: "التحريك وتغيير الحجم بالسحب",
+        gestureCaption: "اضغط مفاتيح التعديل الظاهرة واسحب من أي مكان داخل النافذة باستخدام الماوس أو لوحة التعقب.",
+        gestureModifiers: "مفاتيح التحريك",
+        gestureMove: "اسحب للتحريك",
+        gestureResize: "أضف Shift واسحب لتغيير الحجم",
+        gestureResizeHint: "تحدد نقطة البداية أقرب حافة أو زاوية. بالماوس، يغيّر السحب بالزر الأيمن الحجم أيضًا.",
+        gestureRaiseWindow: "إحضار النافذة المسحوبة إلى المقدمة",
+        shortcuts: "الاختصارات",
+        shortcutsCaption: "استخدم الاختصارات العامة لترتيب النافذة النشطة دون فتح اللوحة.",
+        permissionCaption: "يستخدم تسهيلات الاستخدام لتحريك النوافذ وتغيير حجمها فقط.",
+        noWindow: "لم يُعثر على نافذة نشطة.",
+        missingPermission: "امنح إذن تسهيلات الاستخدام لتحريك النوافذ.",
+        failed: "تعذر تحريك هذه النافذة.",
+        done: "تم ترتيب النافذة.",
+        restored: "تمت استعادة النافذة.",
+        noRestore: "لا يوجد تخطيط سابق لاستعادته.",
+        target: "النافذة النشطة",
+        halves: "أنصاف",
+        thirds: "أثلاث",
+        quarterRows: "صفوف الأرباع",
+        quarterColumns: "أعمدة الأرباع",
+        sixths: "أسداس",
+        corners: "زوايا",
+        other: "الإجراءات",
+        leftHalf: "اليسار",
+        rightHalf: "اليمين",
+        topHalf: "الأعلى",
+        bottomHalf: "الأسفل",
+        centerHalf: "النصف الأوسط",
+        leftThird: "الثلث الأيسر",
+        centerThird: "الثلث الأوسط",
+        rightThird: "الثلث الأيمن",
+        leftTwoThirds: "الثلثان الأيسران",
+        rightTwoThirds: "الثلثان الأيمنان",
+        centerTwoThirds: "الثلثان الأوسطان",
+        topThird: "الثلث العلوي",
+        middleThird: "الثلث الأوسط أفقيًا",
+        bottomThird: "الثلث السفلي",
+        topTwoThirds: "الثلثان العلويان",
+        bottomTwoThirds: "الثلثان السفليان",
+        topQuarter: "الربع العلوي",
+        upperMiddleQuarter: "الربع الأوسط العلوي",
+        lowerMiddleQuarter: "الربع الأوسط السفلي",
+        bottomQuarter: "الربع السفلي",
+        leftQuarter: "الربع الأيسر",
+        leftMiddleQuarter: "الربع الأوسط الأيسر",
+        rightMiddleQuarter: "الربع الأوسط الأيمن",
+        rightQuarter: "الربع الأيمن",
+        topLeftSixth: "السدس العلوي الأيسر",
+        topCenterSixth: "السدس العلوي الأوسط",
+        topRightSixth: "السدس العلوي الأيمن",
+        bottomLeftSixth: "السدس السفلي الأيسر",
+        bottomCenterSixth: "السدس السفلي الأوسط",
+        bottomRightSixth: "السدس السفلي الأيمن",
+        topLeft: "أعلى اليسار",
+        topRight: "أعلى اليمين",
+        bottomLeft: "أسفل اليسار",
+        bottomRight: "أسفل اليمين",
+        maximize: "تكبير",
+        center: "توسيط",
+        nextDisplay: "الشاشة التالية",
+        restore: "استعادة",
+        fullScreen: "ملء الشاشة",
+        previousDisplay: "الشاشة السابقة",
+        edgeSnapEnable: "محاذاة النوافذ إلى حواف الشاشة",
+        edgeSnapCaption: "فعّل هذا الخيار واسحب شريط عنوان نافذة إلى إحدى المناطق المحددة أدناه. انقر منطقة لاختيار موضع النافذة.",
+        edgeSnapSystemConflict: "يستخدم macOS الحواف نفسها. أوقف تجانب النوافذ في سطح المكتب وDock ليتمكن Vorssaint من التحكم.",
+        edgeSnapOpenSystemSettings: "فتح سطح المكتب وDock",
+        edgeSnapWaitingForSystem: "مفعّل في Vorssaint. يبدأ العمل فور إيقاف تجانب macOS.",
+        edgeSnapUseCorner: "استخدام هذه الزاوية",
+        edgeSnapUseEdge: "استخدام هذه الحافة",
+        edgeSnapAreasOnEdge: "مناطق هذه الحافة",
+        marginMaximize: "تكبير مع هامش",
+        marginPerEdge: "الهامش لكل حافة",
+        gapsSection: "الفجوات",
+        gapsCaption: "المسافة بين النوافذ المحاذاة وبين النوافذ وحافة الشاشة.",
+        windowGap: "فجوة النوافذ",
+        screenGap: "فجوة الشاشة",
+        sideRepeatCycle: "تكرار اليسار أو اليمين للتنقل بين الأحجام",
+        sideRepeatCycleCaption: "نصف ثم ثلثان ثم ثلث على الشاشة نفسها. عند الإيقاف ووجود أكثر من شاشة، ينقل التكرار النافذة إلى الشاشة التالية في ذلك الجانب.",
+        gapNone: "بلا",
+        gapTiny: "ضئيل",
+        gapSmall: "صغير",
+        gapMedium: "متوسط",
+        gapLarge: "كبير",
+        gapExtraLarge: "كبير جدًا"
+    )
+}
+
+extension MonitorAlertFeatureStrings {
+    static let ar = MonitorAlertFeatureStrings(
+        section: "التنبيهات",
+        caption: "تظهر التنبيهات عند بلوغ حدودها المحددة. تتجاهل تنبيهات استخدام المعالج وحرارته الارتفاعات الأقصر من نحو 12 ثانية. يحد إعداد التكرار من تكرار التنبيه نفسه فقط.",
+        notificationsDenied: "إشعارات Vorssaint متوقفة في إعدادات النظام، لذا لا يمكن إظهار التنبيهات.",
+        cpu: "ارتفاع استخدام المعالج",
+        cpuTemperature: "ارتفاع حرارة المعالج",
+        memory: "ضغط ذاكرة حرج",
+        disk: "انخفاض مساحة القرص",
+        battery: "انخفاض البطارية",
+        cpuThreshold: "استخدام المعالج أعلى من",
+        cpuTemperatureThreshold: "الحرارة أعلى من",
+        diskThreshold: "المساحة الحرة أقل من",
+        batteryThreshold: "البطارية أقل من",
+        cooldown: "تكرار التنبيه نفسه بعد",
+        cooldown2: "دقيقتين",
+        cooldown5: "5 دقائق",
+        cooldown15: "15 دقيقة",
+        cooldown30: "30 دقيقة",
+        cooldown60: "ساعة",
+        cpuTitle: "ارتفاع استخدام المعالج",
+        cpuBodyFormat: "بقي استخدام المعالج أعلى من %d%% لبضع ثوانٍ.",
+        cpuTemperatureTitle: "المعالج ساخن",
+        cpuTemperatureBodyFormat: "وصلت حرارة المعالج إلى %@.",
+        memoryTitle: "ذاكرة حرجة",
+        memoryBody: "بلغ ضغط الذاكرة المستوى الحرج.",
+        diskTitle: "انخفاض مساحة القرص",
+        diskBodyFormat: "المساحة الحرة في %@ أقل من %d%%.",
+        batteryTitle: "انخفاض البطارية",
+        batteryBodyFormat: "البطارية عند %d%%.",
+        batteryTemperature: "ارتفاع حرارة البطارية",
+        batteryTemperatureThreshold: "الحرارة أعلى من",
+        batteryTemperatureTitle: "البطارية ساخنة",
+        batteryTemperatureBodyFormat: "وصلت حرارة البطارية إلى %@."
     )
 }

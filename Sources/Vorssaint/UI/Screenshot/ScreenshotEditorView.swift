@@ -42,6 +42,11 @@ struct ScreenshotEditorView: View {
     }
 
     var body: some View {
+        AppLocalizedView { localizedContent }
+    }
+
+    @ViewBuilder
+    private var localizedContent: some View {
         // Real rows and columns, not overlays: the canvas scrolls in its own
         // region, so zoomed content can never slide under the controls.
         ZStack {
@@ -58,6 +63,7 @@ struct ScreenshotEditorView: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.leading, 10)
                     canvasArea
+                        .environment(\.layoutDirection, .leftToRight)
                 }
                 .padding(.top, 6)
                 bottomRow
