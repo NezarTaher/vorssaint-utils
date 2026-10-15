@@ -404,7 +404,8 @@ final class MenuBarOrganizerService: ObservableObject {
             return
         }
         hidden = toHide
-        remember(MenuBarHiddenRecord.records(for: layout, items: items, ownBundleID: ownBundleID))
+        remember(MenuBarHiddenRecord.records(for: layout, items: items, neverShown: neverShown,
+                                             ownBundleID: ownBundleID))
     }
 
     /// Shows the whole bar, never-shown icons included, and says why hiding

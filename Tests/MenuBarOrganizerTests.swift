@@ -532,9 +532,13 @@ enum MenuBarOrganizerTests {
             suite.expect(false, "the reference bar partitions")
             return
         }
-        let records = MenuBarHiddenRecord.records(for: layout, items: bar, ownBundleID: own)
+        let records = MenuBarHiddenRecord.records(for: layout, items: bar, neverShown: [], ownBundleID: own)
         suite.expect(records.map(\.identity) == [identity("com.example.alpha"), identity("com.example.beta")],
                      "only items that really hide are remembered")
+        let never = [MenuBarHiddenRecord(identity: identity("com.example.alpha"), appName: "Alpha")]
+        suite.expect(MenuBarHiddenRecord.records(for: layout, items: bar, neverShown: never, ownBundleID: own)
+                        .map(\.identity) == [identity("com.example.beta")],
+                     "an app kept out for good is not remembered as hidden, so the shelf never lists it")
         suite.expect(MenuBarHiddenRecord.decode(MenuBarHiddenRecord.encode(records)) == records,
                      "hidden records survive their stored form")
         suite.expect(MenuBarHiddenRecord.decode(Data("not json".utf8)).isEmpty && MenuBarHiddenRecord.decode(nil).isEmpty,

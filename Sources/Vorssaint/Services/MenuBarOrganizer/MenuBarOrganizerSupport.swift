@@ -407,12 +407,17 @@ struct MenuBarHiddenRecord: Codable, Equatable {
     let identity: MenuBarItemIdentity
     let appName: String?
 
+    /// What a collapse hid, for the shelf and for a bar read while hidden.
+    /// An item kept out for good is not among them even when the walk saw
+    /// it: a bar open for a moment shows it, the shelf never does.
     static func records(for layout: MenuBarLayout, items: [MenuBarItemSnapshot],
-                        ownBundleID: String) -> [MenuBarHiddenRecord] {
+                        neverShown: [MenuBarHiddenRecord], ownBundleID: String) -> [MenuBarHiddenRecord] {
         let byIdentity = Dictionary(items.map { ($0.identity, $0) }, uniquingKeysWith: { first, _ in first })
         return layout.hidden.compactMap { identity in
             guard let item = byIdentity[identity],
-                  MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID) else { return nil }
+                  MenuBarOrganizerPolicy.canHide(item, ownBundleID: ownBundleID),
+                  !neverShown.contains(where: { MenuBarOrganizerPolicy.hideTogether($0.identity, identity) })
+            else { return nil }
             return MenuBarHiddenRecord(identity: identity, appName: item.appName)
         }
     }
