@@ -5,15 +5,6 @@ import Foundation
 
 enum ClipboardSensitiveTextPreferenceTests {
     static func run(_ suite: TestSuite) {
-        // Registration defaults are shared across UserDefaults instances.
-        // Leave later migration fixtures the same unregistered environment.
-        let registrationDomain = UserDefaults.standard.volatileDomain(
-            forName: UserDefaults.registrationDomain)
-        defer {
-            UserDefaults.standard.setVolatileDomain(registrationDomain,
-                                                    forName: UserDefaults.registrationDomain)
-        }
-
         let key = DefaultsKey.clipboardHistoryFilterSensitiveText
         let legacyKey = "clipboardHistorySkipSensitive"
         suite.expect(Defaults.registeredDefaults[key] as? Bool == false,
@@ -23,7 +14,14 @@ enum ClipboardSensitiveTextPreferenceTests {
 
         let domain = "com.vorssaint.tests.clipboard-sensitive-opt-in.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
-        defer { defaults.removePersistentDomain(forName: domain) }
+        // Registration is process-wide, so later migration checks need it back.
+        let registrationDomain = UserDefaults.standard.volatileDomain(
+            forName: UserDefaults.registrationDomain)
+        defer {
+            defaults.removePersistentDomain(forName: domain)
+            UserDefaults.standard.setVolatileDomain(registrationDomain,
+                                                    forName: UserDefaults.registrationDomain)
+        }
         defaults.register(defaults: Defaults.registeredDefaults)
         suite.expect(!defaults.bool(forKey: key), "a fresh clipboard history does not guess secrets")
 
